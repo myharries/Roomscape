@@ -1775,10 +1775,10 @@ setTimeout(directorOnModeChange, 2000);   // v1.2: start the current mode's audi
 server.listen(PORT, () => {
   /* AFTER-DARK: repaint the room when it gets dark, or when the test bypass is
      switched on, so At rest and a running mode both pick up their lights. When the
-     test ends, ha.js handles the lights; here the next change is forced to repaint. */
+     test ends, or at sunrise, ha.js handles the lights; here the next change repaints. */
   startAfterDark(function (why) {
     lastHaSig = null;
-    if (why !== 'bypass-off') return haApplyRoom();
+    if (why !== 'bypass-off' && why !== 'sunrise') return haApplyRoom();
     if (global.__rsFlicker) Object.keys(haCfg().zones || {}).forEach(function (k) { global.__rsFlicker.stop(k); });
   });
   console.log('====================================================');
