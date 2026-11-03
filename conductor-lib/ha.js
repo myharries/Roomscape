@@ -93,10 +93,10 @@ module.exports = function (ctx) {
       const next = (!e && code === 200 && d && d.state) ? d.state === 'above_horizon' : null;
       const was = sunUp; sunUp = next;
       if (was === true && next === false) onChange('sunset');
-      if (was === false && next === true) {                        // sunrise: the outside lights go off, unless a test is running
+      if (was === false && next === true) {                        // sunrise: the room's lights go off, unless a test is running
         onChange('sunrise');
-        const outside = (haCfg().zones || {})[adCfg().followZone] || [];
-        if (outside.length && !bypassed()) haCall('light', 'turn_off', { entity_id: outside, transition: 2 });
+        const room = roomLights();
+        if (room.length && !bypassed()) haCall('light', 'turn_off', { entity_id: room, transition: 2 });
       }
       if (cb) cb();
     });

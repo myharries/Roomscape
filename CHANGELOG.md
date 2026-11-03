@@ -7,7 +7,7 @@
 - The `accent` zone follows each mode's accent colour at 100%.
 - At rest sets the `main` zone to 60% and runs the `cyan_fade` effect on the `accent` zone (`ha.afterDark.restZones`), including at sunset.
 - A 30-minute daylight test switch shows the current mode, and turns the lights off again when it ends. It is available from the app's top bar, the Werewolf Controller and `POST /api/ha/afterdark`.
-- The `accent` zone turns off at sunrise.
+- The room lights turn off at sunrise.
 - The app's top bar links to `controller.html`.
 
 ## 1.05 — 2026-08-25 (conductor v5.05)
