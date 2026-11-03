@@ -1774,8 +1774,13 @@ resolveFrameImages(state); resolveOverlays(state); resolveFx(state); state.chrom
 setTimeout(directorOnModeChange, 2000);   // v1.2: start the current mode's audio director after boot
 server.listen(PORT, () => {
   /* AFTER-DARK: repaint the room when it gets dark, or when the test bypass is
-     switched on, so At rest and a running mode both pick up their lights. */
-  startAfterDark(function () { lastHaSig = null; haApplyRoom(); });
+     switched on, so At rest and a running mode both pick up their lights. When the
+     test ends, ha.js handles the lights; here the next change is forced to repaint. */
+  startAfterDark(function (why) {
+    lastHaSig = null;
+    if (why !== 'bypass-off') return haApplyRoom();
+    if (global.__rsFlicker) Object.keys(haCfg().zones || {}).forEach(function (k) { global.__rsFlicker.stop(k); });
+  });
   console.log('====================================================');
   console.log('  Roomscape Conductor  v5.05 (community v1.05)');   /* RS-SEC v1.01 (F14): the banner had been left at v4.74/v0.50 */
   console.log('  modules : ' + LIB_MODULES.join(', ') + '  (conductor-lib @ ' + LIB_DIR + ')');

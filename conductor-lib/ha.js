@@ -78,7 +78,7 @@ module.exports = function (ctx) {
      sun.sun cannot be read the lights are allowed, so a broken sensor cannot
      silently disable the room. The test bypass expires by itself. */
   const BYPASS_MS = 30 * 60 * 1000;
-  let sunUp = null, bypassUntil = 0, sunTimer = null, onChange = function () {};
+  let sunUp = null, bypassUntil = 0, bypassTimer = null, sunTimer = null, onChange = function () {};
   function adCfg() { return Object.assign({}, DEFAULT_SETTINGS.ha.afterDark, (ctx.settings().ha || {}).afterDark || {}); }
   function bypassed() { return Date.now() < bypassUntil; }
   function lightsAllowed() { return !adCfg().on || sunUp !== true || bypassed(); }
@@ -100,9 +100,20 @@ module.exports = function (ctx) {
     return { ok: true, on: !!adCfg().on, sunUp: sunUp, dark: sunUp === false, allowed: lightsAllowed(), bypass: bypassed(),
              bypassLeftS: bypassed() ? Math.ceil((bypassUntil - Date.now()) / 1000) : 0 };
   }
+  /* Ending the test (switched off, or the 30 minutes run out) puts the lights back:
+     off again if the sun is still up, otherwise left alone for the night's scene. */
+  function endBypass() {
+    if (bypassTimer) { clearTimeout(bypassTimer); bypassTimer = null; }
+    if (!bypassUntil) return;
+    bypassUntil = 0; onChange('bypass-off');
+    if (sunUp === true && adCfg().on) { const room = roomLights(); if (room.length) haCall('light', 'turn_off', { entity_id: room, transition: 1 }); }
+  }
   function setBypass(on) {
-    bypassUntil = on ? Date.now() + BYPASS_MS : 0;
-    if (on) onChange('bypass');
+    if (!on) { endBypass(); return afterDarkStatus(); }
+    if (bypassTimer) clearTimeout(bypassTimer);
+    bypassUntil = Date.now() + BYPASS_MS;
+    bypassTimer = setTimeout(endBypass, BYPASS_MS); if (bypassTimer.unref) bypassTimer.unref();
+    onChange('bypass');
     return afterDarkStatus();
   }
   function startAfterDark(fn) {
