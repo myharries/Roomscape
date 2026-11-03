@@ -2232,7 +2232,10 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
         if (z.brightness_pct != null && z.brightness_pct !== '') pay.brightness_pct = +z.brightness_pct;
         if (z.effect && z.effect !== 'none') pay.effect = z.effect;
         if (pay.transition == null) pay.transition = 2;
-        haCall('light', 'turn_on', pay, function(e){ if (e) console.log('[ha2.7-zone ' + k + ']:', e.message); });
+        /* Some LED controllers ignore an effect while they are off, so wake them first. */
+        var sendZone = function(){ haCall('light', 'turn_on', pay, function(e){ if (e) console.log('[ha2.7-zone ' + k + ']:', e.message); }); };
+        if (pay.effect) haCall('light', 'turn_on', { entity_id: ents, brightness_pct: pay.brightness_pct == null ? 100 : pay.brightness_pct }, function(){ setTimeout(sendZone, 800); });
+        else sendZone();
         console.log('[ha2.7] zone ' + k + ' -> ' + (z.scene || 'base') + (z.effect && z.effect !== 'none' ? ' +' + z.effect : '') + (z.brightness_pct != null ? ' @' + z.brightness_pct + '%' : ''));
       });
       var tvIds = Object.values(ha.tvs || {}).filter(Boolean);
