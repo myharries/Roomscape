@@ -600,7 +600,7 @@ function resolveOverlays(s) {
   /* v2.0 weather fills EMPTY effect slots on weather-enabled modes (hand-picked effects always win) */
   if ((settings.weather || {}).on && weather.effect && (prof.weatherFx === true || (prof.weatherFx !== false && s.game === AT_REST))) {   // Phase 2c: at-rest semantic
     const wp = '/media/' + weather.effect.split('/').map(encodeURIComponent).join('/');
-    s.effectImages = s.effectImages.map(function (e, i) { return e || ((s.frames[i] === 'pano' || s.frames[i] === 'portrait') ? wp : null); });
+    s.effectImages = s.effectImages.map(function (e, i) { return e || ((s.frames[i] === 'pano' || s.frames[i] === 'portrait' || s.frames[i] === 'photos') ? wp : null); });
   }
   /* v2.0 sun tone nudge (daylight sync) */
   if ((settings.weather || {}).on && (settings.weather || {}).sunTone && s.artTone && weather.sunFactor !== 1)
