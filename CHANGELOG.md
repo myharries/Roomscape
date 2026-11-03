@@ -12,6 +12,7 @@
 - The app's top bar links to `controller.html`.
 - Weather effects also show over `photos` frames, so a slideshow At Rest follows the sky.
 - Single-photo layouts show the whole photo, so portrait photos are no longer cropped on landscape screens.
+- Adds a Roomscape icon (`icons/`) for the browser tab, home screen and Docker.
 
 ## 1.05 — 2026-08-25 (conductor v5.05)
 
