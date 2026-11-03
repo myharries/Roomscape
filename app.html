@@ -87,7 +87,7 @@
   #spaces button.on{background:linear-gradient(180deg,var(--gold2),var(--gold));color:#1a1407;font-weight:700}
   /* v2.54: Design is a guarded destination — smaller ghost button; hold 600ms to enter from Play */
   #spaces button[data-space="design"]:not(.on){padding:9px 13px;font-size:11.5px;color:var(--faint);opacity:.85}
-  #gear,#calbtn,#designtgl{font-size:17px;padding:8px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
+  #gear,#calbtn,#designtgl,#ctlbtn,#darkbtn{font-size:17px;text-decoration:none;padding:8px 11px;border-radius:10px;border:1px solid var(--line);background:var(--panel);cursor:pointer}
   #designtgl:hover{border-color:var(--gold)}
   #designtgl.on{border-color:var(--gold);box-shadow:inset 0 0 0 1px var(--gold);background:var(--panel3)}   /* Phase 4b: lit while Design is open */
   /* v1.80 calendar sheet */
@@ -707,6 +707,8 @@
   <span id="hdot" title="Conductor"></span>
   <button id="calbtn" title="Calendar — the room's year, days and sky">📅</button>
   <button id="designtgl" title="Open Design — build and edit modes">✏️</button><!-- Phase 4b: visible Design entry (the 600ms hold on the space pill still works) -->
+  <button id="darkbtn" title="After-dark lights" style="display:none">🌙</button>
+  <a id="ctlbtn" href="/controller.html" target="_blank" rel="noopener" title="Open the Werewolf Controller">🐺</a>
   <button id="gear" title="Settings">⚙</button>
 </div>
 

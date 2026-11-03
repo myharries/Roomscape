@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Werewolf Controller</title>
+<link href="https://fonts.googleapis.com/css2?family=Pirata+One&family=Spectral:wght@400;600&display=swap" rel="stylesheet">
+<meta name="theme-color" content="#120e1c">
+<link rel="icon" id="fav" type="image/png">
+<style>
+/* Look & feel matches the player page (index.html): ink/fog/moon palette, Pirata One + Spectral,
+   moonlit village background, drifting mist, rising embers, banner hero. */
+:root{--ink:#120e1c;--fog:#241c36;--fog2:#2f2546;--moon:#ebe6d2;--blood:#b02a30;--lantern:#e6a93a;--dim:#9a93ad;--ok:#3cc864;--line:#3d3256;
+ --bgimg:none;--bannerimg:none}
+*{box-sizing:border-box}
+body{margin:0;background:var(--ink);color:var(--moon);font:17px/1.5 Spectral,Georgia,serif;min-height:100vh;padding:env(safe-area-inset-top) 0 env(safe-area-inset-bottom)}
+h1,h2,h3{font-family:'Pirata One',serif;font-weight:400;margin:.3em 0;letter-spacing:.02em}h1{font-size:2.2rem;color:var(--lantern)}h2{font-size:1.7rem;color:var(--lantern)}h3{font-size:1.3rem}
+button,input,select{font:inherit;color:inherit;background:var(--fog);border:1px solid var(--line);border-radius:8px;padding:9px 12px;margin:3px 0}
+input,select{width:100%}button{cursor:pointer;width:auto;font-weight:600}button:disabled{opacity:.4;cursor:default}
+button:hover:not(:disabled){border-color:#5b4b80}
+button.main{background:var(--blood);border-color:var(--blood);font-size:1.05rem;padding:13px 18px}
+button.on{background:var(--lantern);color:var(--ink);border-color:var(--lantern)}button.sm{padding:5px 10px;font-size:.88rem}button.danger{border-color:var(--blood);color:#ff9a9a}
+label{display:block;color:var(--dim);font-size:.9rem;margin-top:8px}
+:focus-visible{outline:2px solid var(--lantern);outline-offset:2px}
+code{color:var(--lantern)}
+
+/* ---- atmosphere (same layers as index.html) ---- */
+.bg,.mist,.embers{position:fixed;inset:0;pointer-events:none;overflow:hidden}
+.bg{z-index:-4;background:#0b0912 var(--bgimg) 62% 40%/cover no-repeat;animation:breathe 60s ease-in-out infinite alternate;transform-origin:65% 30%}
+.vig{position:fixed;inset:0;z-index:-1;pointer-events:none;background:radial-gradient(ellipse at 50% 40%,rgba(10,8,18,.05) 35%,rgba(6,4,12,.75) 100%),linear-gradient(rgba(12,9,22,.35),rgba(12,9,22,.5))}
+.mist{z-index:-3}.mist i{position:absolute;left:0;width:200%;background-repeat:repeat-x;will-change:transform}
+.mist i:nth-child(1){bottom:-6%;height:58%;opacity:.5;background-size:50% 100%;animation:drift 95s linear infinite}
+.mist i:nth-child(2){bottom:10%;height:42%;opacity:.3;background-size:50% 100%;animation:drift 150s linear infinite reverse}
+.mist i:nth-child(3){bottom:-2%;height:30%;opacity:.45;background-size:33.4% 100%;animation:drift 60s linear infinite;transform:scaleY(-1)}
+.mist i{background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='900' height='320'><filter id='f' x='0' y='0' width='100%25' height='100%25'><feTurbulence type='fractalNoise' baseFrequency='0.005 0.014' numOctaves='4' seed='7' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0.78  0 0 0 0 0.84  0 0 0 0 0.95  0 0 0 1.7 -0.5'/></filter><rect width='100%25' height='100%25' filter='url(%23f)'/></svg>");
+ -webkit-mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.6) 30%,#000 55%,rgba(0,0,0,.6) 80%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,rgba(0,0,0,.6) 30%,#000 55%,rgba(0,0,0,.6) 80%,transparent 100%)}
+.mist i:nth-child(2){-webkit-mask-image:linear-gradient(to bottom,transparent 0,#000 50%,transparent 100%);mask-image:linear-gradient(to bottom,transparent 0,#000 50%,transparent 100%)}
+.embers{z-index:-2}.ember{position:absolute;bottom:-14px;left:var(--x);width:var(--s);height:var(--s);border-radius:50%;opacity:0;
+ background:radial-gradient(circle,#fff1b8 0%,#ffa530 40%,rgba(255,110,20,0) 72%);box-shadow:0 0 calc(var(--s)*2.5) calc(var(--s)*.5) rgba(255,130,30,.55);mix-blend-mode:screen;
+ animation:rise var(--d) linear var(--delay) infinite,flicker .9s ease-in-out var(--delay) infinite alternate}
+@keyframes rise{0%{transform:translate(0,0);opacity:0}8%{opacity:1}70%{opacity:.8}100%{transform:translate(var(--dx),-108vh);opacity:0}}
+@keyframes flicker{from{filter:brightness(.7)}to{filter:brightness(1.5)}}
+@keyframes drift{to{transform:translateX(-50%)}}
+@keyframes breathe{to{transform:scale(1.06)}}
+@media(prefers-reduced-motion:reduce){.bg,.mist i,.ember{animation:none}.embers{display:none}}
+
+/* ---- frame: one translucent sheet, like #app on the player page ---- */
+.sheet{position:relative;z-index:1;max-width:1240px;margin:14px auto;background:rgba(14,10,24,.74);backdrop-filter:blur(3px);-webkit-backdrop-filter:blur(3px);
+ border:1px solid rgba(235,230,210,.1);border-radius:16px;box-shadow:0 8px 40px rgba(0,0,0,.5);overflow:hidden}
+#login.sheet{max-width:460px;margin:8vh auto}
+@media(max-width:560px){.sheet,#login.sheet{margin:0;border-radius:0;border-width:0;min-height:100vh}}
+.hero{position:relative;min-height:150px;padding:26px 18px 18px;display:flex;align-items:center;justify-content:center;gap:16px;text-align:left;
+ background:linear-gradient(rgba(12,9,22,.25),rgba(12,9,22,.8)),var(--bannerimg) 66% 40%/cover no-repeat,#1b1430;border-bottom:1px solid rgba(230,169,58,.35)}
+.hlogo{width:70px;height:70px;border-radius:50%;border:2px solid var(--lantern);box-shadow:0 0 22px rgba(230,169,58,.5),0 4px 14px rgba(0,0,0,.7);flex:none;
+ object-fit:cover;background:radial-gradient(circle at 50% 40%,#2f2546,#120e1c)}
+.htitle{font-family:'Pirata One',serif;font-size:clamp(2.2rem,7vw,3.2rem);line-height:1;color:var(--lantern);letter-spacing:.04em;text-shadow:0 0 18px rgba(230,169,58,.55),0 3px 8px #000}
+.hsub{font-size:.95rem;color:var(--moon);opacity:.9;text-shadow:0 2px 6px #000;margin-top:4px}
+.bar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:9px 14px;background:rgba(36,28,54,.82);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5;backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+.bar .sp{flex:1}
+.badge{background:var(--fog);border:1px solid var(--line);border-radius:99px;padding:3px 12px;font-size:.9rem}.badge.live{border-color:var(--lantern);color:var(--lantern)}
+main{display:grid;gap:14px;padding:14px;grid-template-columns:1fr}@media(min-width:900px){main{grid-template-columns:3fr 2fr}}
+.card{background:rgba(36,28,54,.62);border:1px solid rgba(235,230,210,.08);border-radius:12px;padding:14px}
+.card>h2:first-child{border-left:4px solid var(--lantern);padding-left:10px;margin-top:0}
+#login .pad{padding:4px 18px 20px}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}.grid button{width:100%;margin:0}
+.big{font-family:'Pirata One',serif;font-size:2.6rem;letter-spacing:.18em;color:var(--lantern);text-shadow:0 0 14px rgba(230,169,58,.45)}
+.sub{color:var(--dim);font-size:.9rem}.err{color:#ff8b8b}.ok{color:var(--ok)}
+.chip{display:inline-flex;align-items:center;gap:6px;background:var(--fog);border-radius:99px;padding:4px 10px;margin:3px}.chip.dead{color:var(--dim);text-decoration:line-through}
+.chip a{color:var(--lantern);cursor:pointer;text-decoration:none}.log{max-height:240px;overflow:auto;font-size:.9rem;color:var(--dim)}.log p{margin:.2em 0}.log b{color:var(--moon);font-weight:400}
+.timer{font-family:'Pirata One',serif;font-size:2rem;color:var(--lantern);font-variant-numeric:tabular-nums}
+#toast{position:fixed;left:14px;right:14px;bottom:18px;background:var(--blood);padding:12px;border-radius:10px;display:none;z-index:20;text-align:center}
+dialog{background:var(--fog);color:var(--moon);border:1px solid var(--line);border-radius:14px;max-width:460px;width:92vw;box-shadow:0 8px 30px rgba(0,0,0,.6)}dialog::backdrop{background:rgba(6,4,12,.7)}
+</style></head><body>
+<div class="bg"></div><div class="mist"><i></i><i></i><i></i></div><div class="embers" id="embers"></div><div class="vig"></div>
+<div id="toast" role="alert"></div>
+
+<div id="login" class="sheet" hidden>
+  <header class="hero"><img class="hlogo" data-icon alt=""><div><div class="htitle">Werewolf</div><div class="hsub">Controller v 2.2 · run the night from a second device</div></div></header>
+  <div class="pad"><p class="sub">Sign in with your admin account.</p>
+  <label>Game server address
+    <select id="l_api">
+      <option value="https://myharries.com/werewolf-test/api.php">https://myharries.com/werewolf-test/api.php (Test)</option>
+      <option value="https://myharries.com/werewolf/api.php">https://myharries.com/werewolf/api.php (Production)</option>
+    </select>
+  </label>
+  <label>Username<input id="l_u" autocapitalize="none" autocomplete="username"></label>
+  <label>Password<input id="l_p" type="password" maxlength="8" autocomplete="current-password"></label>
+  <button class="main" onclick="doLogin()" style="width:100%;margin-top:12px">Sign in</button>
+  <p class="sub" style="margin-top:14px">This page's address (it must be in <code>ALLOW_ORIGINS</code> in config.php): <b id="l_origin"></b></p>
+</div></div>
+
+<div id="app" class="sheet" hidden>
+<header class="hero"><img class="hlogo" data-icon alt=""><div><div class="htitle">Werewolf Controller</div><div class="hsub">v 2.2 · The game on one side, the room on the other</div></div></header>
+<div class="bar">
+  <span class="badge" id="h_game">no game</span><span class="badge live" id="h_phase" hidden></span>
+  <span class="sp"></span>
+  <span class="badge" id="h_room">Room: not set</span>
+  <button class="sm" onclick="openSettings()">⚙ Settings</button><button class="sm" onclick="logout()">Log out</button>
+</div>
+<main>
+  <section class="card" id="gamecol">
+    <h2>The game</h2>
+    <div id="g_main"></div>
+    <div id="g_setup"></div>
+    <h3 style="margin-top:14px">The village</h3><div id="g_players"></div>
+    <h3 style="margin-top:14px">The story so far</h3><div class="log" id="g_log"></div>
+    <div id="g_foot" style="margin-top:12px"></div>
+  </section>
+  <section class="card" id="roomcol">
+    <h2>The room (Roomscape)</h2>
+    <p class="sub" id="r_status">Set the Roomscape address and token in Settings.</p>
+    <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_follow" style="width:auto" onchange="setFollow(this.checked)"> <b>Follow the game automatically</b></label></div>
+    <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_test" style="width:auto" onchange="setLightTest(this.checked)"> Test lights in daylight <span class="sub" id="r_sun"></span></label></div>
+    <div class="grid" id="r_modes"></div>
+    <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button></div>
+    <h3 style="margin-top:14px">Room log</h3><div class="log" id="r_log"></div>
+  </section>
+</main>
+</div>
+
+<dialog id="settings"><h2>Settings</h2>
+  <p class="sub">Saved on this device only.</p>
+  <label>Game server address (api.php)<input id="s_api"></label>
+  <label>Roomscape address (for example http://192.168.10.235:8090). Leave empty if this page is served by Roomscape itself.<input id="s_rs"></label>
+  <label>Roomscape admin token<input id="s_tok" type="password" autocomplete="off"></label>
+  <label>Theme pack id<input id="s_pack"></label>
+  <label class="row"><input type="checkbox" id="s_spot" style="width:auto"> Spotlight the night roles while following</label>
+  <label>Return to Night this many seconds after a spotlight<input id="s_rev" type="number" min="5" max="120"></label>
+  <label class="row"><input type="checkbox" id="s_noint" style="width:auto"> Skip intros on the buttons (automatic launches always play them)</label>
+  <label class="row"><input type="checkbox" id="s_rest" style="width:auto"> Put the room at rest when the game is closed</label>
+  <div class="row" style="margin-top:12px"><button class="main" onclick="saveSettings()">Save</button><button onclick="testRoom()">Test Roomscape</button><button onclick="document.getElementById('settings').close()">Close</button></div>
+</dialog>
+
+<script>
+const $=s=>document.querySelector(s),LS=localStorage,esc=s=>String(s??'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const MODES=[['lobby','Game Lobby','🏠'],['gather','Gathering at Dusk','🏮'],['feast',"Baker's Feast",'🍞'],['night','Night Falls','🌙'],['wolves','The Wolf Pack','🐺'],['seer',"The Seer's Vision",'🔮'],['witch','The Witching Hour','🧪'],['doctor','Doctor Heals','🩺'],['dawn','Dawn Breaks','🌅'],['vote','The Village Votes','🔔'],['victory-village','The Village Is Saved','🏆'],['victory-wolves','The Wolves Win','🩸'],['victory-lovers','The Lovers Win','💘'],['cupid',"Cupid's Arrow",'💘'],['spellcaster','The Spell Caster','✨'],['curmudgeon','The Curmudgeon','🤐'],['masons','The Masons Meet','🤝'],['death-wolves','Devoured','🦴'],['death-poison','Poisoned','☠'],['death','The Graveyard','🪦'],['hunter',"The Hunter's Shot",'🏹'],['succession','A New Leader','📜'],['pardon','The Royal Pardon','👑'],['tied','No One Is Lynched','⚖']];
+const C={api:()=>LS['wc.api']||(location.hostname==='myharries.com'?'api.php':''),rs:()=>(LS['wc.rs']||'').replace(/\/$/,''),tok:()=>LS['wc.rtoken']||'',pack:()=>{const p=LS['wc.pack'];return !p||p==='werewolves-for-game-night'?'werewolves':p},
+ follow:()=>LS['wc.follow']==='1',spot:()=>LS['wc.spot']!=='0',rev:()=>+(LS['wc.rev']||25),noint:()=>LS['wc.noint']==='1',rest:()=>LS['wc.rest']!=='0'};
+let tok=LS['wc.tok'],S=null,timer=null,lastId=null,lastPhase=null,roomMode=null,lastLaunch={m:'',t:0},revertT=null,hadGame=false,invites=null;
+const toast=m=>{const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',4500)};
+function paint(id,html){const el=$(id);if(!el||el.dataset.h===html)return;if(el.contains(document.activeElement)&&/INPUT|SELECT/.test(document.activeElement.tagName))return;el.dataset.h=html;el.innerHTML=html}
+
+/* ---------- game server ---------- */
+async function api(a,b={}){const url=C.api();if(!url){toast('Set the game server address first.');throw {}}
+ let r;try{r=await fetch(url,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify({...b,a,token:tok})})}  /* text/plain is a "simple" request: no preflight (OPTIONS) check, which some hosts block */
+ catch(e){console.error('Game server request failed',e);toast('Cannot reach the game server. Check the address, that the new api.php is uploaded, and that '+location.origin+' is in ALLOW_ORIGINS in config.php.');throw e}
+ const j=await r.json().catch(()=>({error:'Server error.'}));
+ if(r.status===401&&tok){logout(true)}if(!r.ok){toast(j.error||'Error');throw j}return j}
+async function doLogin(){LS['wc.api']=$('#l_api').value.trim();if(!$('#l_u').value||!$('#l_p').value){toast('Enter your admin username and password.');return}try{const j=await api('login',{username:$('#l_u').value,password:$('#l_p').value,code:''});if(!j.admin){toast('That account is not an admin.');return}tok=j.token;LS['wc.tok']=tok;start()}catch{}}
+async function logout(quiet){try{if(!quiet&&tok)await api('logout')}catch{}tok=null;delete LS['wc.tok'];clearInterval(timer);S=null;lastId=null;$('#app').hidden=true;showLogin()}
+function showLogin(){$('#login').hidden=false;$('#l_origin').textContent=location.origin;$('#l_api').value=C.api()||'https://myharries.com/werewolf-test/api.php'}
+function start(){$('#login').hidden=true;$('#app').hidden=false;$('#r_follow').checked=C.follow();buildModes();poll();clearInterval(timer);timer=setInterval(poll,2000);roomHealth();setInterval(roomHealth,15000)}
+async function poll(){if(!tok)return;try{S=await api('ctl');S._wd=S.wolfLeft!=null?Date.now()+S.wolfLeft*1000:0;S._vd=S.voteLeft!=null?Date.now()+S.voteLeft*1000:0;renderGame();follow()}catch{}}
+const send=async o=>{try{S=await api('game',o);await poll()}catch{}};
+const ask=(m,fn)=>confirm(m)&&fn();
+
+/* ---------- the game panel ---------- */
+function renderGame(){
+ const s=S,ph=s.phase;$('#h_game').textContent=ph==='none'?'no game':`${s.game} · code ${s.code}`;
+ const hp=$('#h_phase');hp.hidden=ph==='none';hp.textContent={lobby:'Lobby',night:'Night '+s.night,day:'Day '+s.night,vote:'The vote',last:'A last act',over:'Game over'}[ph]||ph;
+ if(ph==='none'){paint('#g_main','<p class="sub">No game is open. Set one up below.</p>');paint('#g_players','');paint('#g_log','');paint('#g_foot','');setupForm();return}
+ $('#g_setup').innerHTML&&($('#g_setup').innerHTML='');
+ let m='';const names=s.players.map(p=>p.name);
+ if(ph==='lobby'){const need=s.min-s.players.length;
+  m=`<div class="row"><span class="sub">Players join with code</span><span class="big">${esc(s.code)}</span></div>
+  <div class="row"><label style="margin:0">Name <input id="c_name" value="${esc(s.game)}" onchange="send({t:'rename',name:this.value})" style="width:240px"></label>
+  <label style="margin:0">Minimum <input id="c_min" type="number" min="3" max="30" value="${s.min}" onchange="send({t:'setmin',n:+this.value})" style="width:80px"></label></div>
+  <div class="row" style="margin-top:10px"><button class="main" ${need>0?'disabled':''} onclick="send({t:'start'})">▶ Start the game${need>0?' (needs '+need+' more)':''}</button>
+  <button onclick="openInvites()">✉ Email the code…</button><button class="danger" onclick="ask('Close this lobby? Everyone is removed.',closeGame)">Close lobby</button></div><div id="g_inv"></div>`}
+ else if(ph==='night'){const pend=(s.pending||[]).map(x=>`<span class="chip">${esc(x.t)}: ${x.announced?'announced':x.done?'done':'waiting'}</span>`).join('');
+  m=`<div class="row"><b>Night ${s.night}</b>${s.wolfLeft!=null?`<span class="sub">The wolves have</span><span class="timer" id="t_wolf"></span>`:''}</div><div>${pend}</div>
+  <div class="row" style="margin-top:10px"><button class="main" onclick="ask('Skip every role that has not chosen yet? Their powers are not used tonight.',()=>send({t:'skip'}))">⏭ Skip waiting</button></div>`}
+ else if(ph==='day'){m=`<p>The village is discussing. <span class="sub">${s.alive} alive.</span></p><div class="row"><button class="main" onclick="send({t:'callvote'})">🔔 Call the vote</button></div>`}
+ else if(ph==='vote'){m=`<div class="row"><b>The vote</b><span class="sub">voted ${esc(s.voted)}</span>${s.voteLeft!=null?`<span class="timer" id="t_vote"></span>`:''}</div>
+  <div class="row" style="margin-top:10px">${s.voteLeft!=null?'<button class="main" disabled>The vote is ending…</button>':`<button class="main" onclick="send({t:'closevote'})">⏳ End the vote (30 second warning)</button>`}</div>`}
+ else if(ph==='last'){m=`<p>Waiting for <b>${esc(s.lastAct?s.lastAct.name:'?')}</b>'s last act (${esc(s.lastAct?s.lastAct.kind==='hunter'?'Hunter\'s shot':'Leader\'s successor':'')}).</p><div class="row"><button class="main" onclick="ask('Make a random choice?',()=>send({t:'skip'}))">⏭ Skip waiting</button></div>`}
+ else if(ph==='over'){const w=(s.narr.slice(-1)[0]||{}).text||'';m=`<p><b>${esc(w)}</b></p><div class="row"><button class="main" onclick="send({t:'again'})">↻ Play again</button><button class="danger" onclick="ask('Close the game? Everyone is removed.',closeGame)">End and close</button></div>`}
+ paint('#g_main',m+(s.acting?'<p class="sub">You are acting admin until the original admin logs back in.</p>':''));
+ paint('#g_players',s.players.map(p=>`<span class="chip ${p.alive?'':'dead'}">${p.silenced?'🤐 ':''}${esc(p.name)}${p.role?` <span class="sub">· ${esc(p.role)}</span>`:''}${p.auto?' 🤖':''}${p.id!==s.you&&(p.alive||ph==='lobby')?` <a title="Make admin" onclick="${p.dummy?'':`ask('Make ${esc(p.name)} the admin?',()=>send({t:'makeadmin',id:${p.id}}))`}">${p.dummy?'':'👑'}</a> <a title="Remove" onclick="ask('Remove ${esc(p.name)} from the game?',()=>send({t:'kick',id:${p.id}}))">✕</a>`:''}</span>`).join(''));
+ paint('#g_log',s.narr.slice(-14).map(x=>`<p><b>${x.fx?{howl:'🐺',howl_after:'🐺',bells:'🔔',scream:'😱'}[x.fx]+' ':''}${esc(x.text)}</b></p>`).join(''));
+ paint('#g_foot',ph==='lobby'?'':`<div class="row"><button class="danger sm" onclick="ask('Abandon this game and return everyone to the lobby?',()=>send({t:'reset'}))">Reset to lobby</button><button class="danger sm" onclick="ask('Close the game completely?',closeGame)">End game and close</button>
+  ${s.test?`<button class="sm" onclick="send({t:'auto',id:'all',on:true})">🤖 All dummies on autopilot</button><button class="sm" onclick="send({t:'auto',id:'all',on:false})">Autopilot off</button>`:''}</div>`);
+ const lg=$('#g_log');lg.scrollTop=lg.scrollHeight;
+}
+async function closeGame(){try{await api('close_game');if(C.rest())await roomRest();await poll()}catch{}}
+function setupForm(){const el=$('#g_setup');if(el.dataset.built)return;el.dataset.built=1;
+ el.innerHTML=`<label>Game name<input id="n_name"></label><div class="row"><label style="margin:0">Code (6 letters or numbers)<input id="n_code" maxlength="6" style="width:150px;text-transform:uppercase"></label>
+ <label style="margin:0">Minimum players<input id="n_min" type="number" min="3" max="30" value="5" style="width:110px"></label></div>
+ <label class="row"><input type="checkbox" id="n_fast" style="width:auto"> Quick narration</label><div class="row" style="margin-top:8px"><button class="main" onclick="newGame(false)">Open the lobby</button></div>
+ <h3 style="margin-top:14px">Test game with dummy players</h3><div class="row"><label style="margin:0">Total players (3 to 12)<input id="n_tn" type="number" min="3" max="12" value="6" style="width:110px"></label><button onclick="newGame(true)">Start a dummy test game</button></div>`;
+ api('suggest_name',{base:baseName()}).then(j=>{if(!$('#n_name').value)$('#n_name').value=j.name}).catch(()=>{$('#n_name').value=baseName()});
+ $('#n_code').value=(Math.random().toString(36)+'000000').slice(2,8).toUpperCase()}
+const dayN=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];function baseName(){const d=new Date(),p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}${p(d.getMonth()+1)}${p(d.getDate())}-${dayN[d.getDay()]}`}
+async function newGame(test){const b={name:$('#n_name').value,code:$('#n_code').value,fast:$('#n_fast').checked,min:$('#n_min').value};if(test){b.test=true;b.dummies=Math.max(2,Math.min(11,(+$('#n_tn').value||6)-1))}try{await api('create_game',b);$('#g_setup').dataset.built='';await poll()}catch{}}
+async function openInvites(){const box=$('#g_inv');box.innerHTML='<p class="sub">Loading…</p>';try{const us=await api('admin_users'),here=new Set(S.players.map(p=>p.name));
+ const list=us.filter(u=>u.email&&u.email_ok&&!u.is_admin&&!here.has(u.name));
+ box.innerHTML=list.length?`<h3>Email the code to</h3>`+list.map(u=>`<span class="chip">${esc(u.name)} <a onclick="mailTo(${u.id},this)">✉ send</a></span>`).join(''):'<p class="sub">Nobody else has allowed emails.</p>'}catch{}}
+async function mailTo(id,el){try{const j=await api('admin_send_code',{id});el.textContent='✓ sent';toast('Sent to '+j.to)}catch{}}
+setInterval(()=>{const f=t=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0'),left=d=>Math.max(0,Math.ceil((d-Date.now())/1000));
+ const w=$('#t_wolf');if(w&&S&&S._wd)w.textContent=f(left(S._wd));const v=$('#t_vote');if(v&&S&&S._vd)v.textContent=f(left(S._vd))},500);
+
+/* ---------- the room (Roomscape) ---------- */
+function buildModes(){$('#r_modes').innerHTML=MODES.map(([id,name,ic])=>`<button id="m_${id}" onclick="launch('${id}',{manual:true})">${ic} ${esc(name)}</button>`).join('')}
+function markMode(){MODES.forEach(([id])=>{const b=$('#m_'+id);if(b)b.classList.toggle('on',roomMode===id)})}
+function rlog(t,bad){const el=$('#r_log');const p=document.createElement('p');p.innerHTML=`<b class="${bad?'err':''}">${new Date().toLocaleTimeString()}</b> ${esc(t)}`;el.appendChild(p);while(el.children.length>40)el.firstChild.remove();el.scrollTop=el.scrollHeight}
+async function rs(path,post,body){if(!C.rs()&&!/\/app\//.test(location.pathname)&&!C.tok())throw new Error('Roomscape is not set up');
+ const r=await fetch(C.rs()+path,{method:post?'POST':'GET',headers:{'x-rs-token':C.tok(),'Content-Type':'application/json'},body:post?JSON.stringify(body||{}):undefined});
+ const j=await r.json().catch(()=>({}));if(!r.ok)throw new Error(j.error||('HTTP '+r.status));return j}
+async function launch(mode,o={}){
+ const target = `${C.pack()}.${mode}`;   /* Game Lobby now lives in the theme pack too */
+ if(o.manual)qClear();
+ const now=Date.now();
+ if(!o.force&&lastLaunch.m===mode&&now-lastLaunch.t<2500)return;lastLaunch={m:mode,t:now};
+ const skip=o.nointro||(o.manual&&C.noint());
+ try{
+  await rs(`/api/game/${encodeURIComponent(target)}${skip?'?nointro=1':''}`,true);
+  roomMode=mode;markMode();rlog(`${o.auto?'Auto: ':''}${mode}${skip?' (no intro)':''}`);
+ }
+ catch(e){rlog(`Could not launch ${mode}: ${e.message}`,true);toast('Room: '+e.message)}}
+async function roomRest(){qClear();try{await rs('/api/panic',true);roomMode=null;markMode();
+ $('#r_log').innerHTML='';   /* At rest clears the room log */
+ rlog('At rest')}catch(e){rlog('Could not stop the room: '+e.message,true)}}
+async function roomHealth(){const el=$('#h_room'),st=$('#r_status');if(!C.rs()&&!C.tok()){el.textContent='Room: not set';return}
+ try{const h=await rs('/api/health');rs('/api/ha/afterdark').then(showSun).catch(()=>{});el.textContent='Room: connected';el.style.color='var(--ok)';st.textContent=`Connected to Roomscape${h.mode?' · now: '+h.mode:''}.`}catch(e){el.textContent='Room: unreachable';el.style.color='#ff8b8b';st.textContent='Cannot reach Roomscape ('+e.message+'). Check the address, the token and the CORS setting.'}}
+/* After-dark lights: the room's lights only come on when the sun is down. The test bypass lasts 30 minutes. */
+function showSun(s){$('#r_test').checked=!!s.bypass;$('#r_sun').textContent=s.bypass?`(${Math.ceil(s.bypassLeftS/60)} min left)`:s.dark?'(after dark: lights on duty)':s.sunUp?'(sun is up: lights stay off)':''}
+async function setLightTest(on){try{showSun(await rs('/api/ha/afterdark',true,{bypass:on}));rlog(on?'Light test on for 30 minutes':'Light test off')}catch(e){rlog('Could not change the light test: '+e.message,true);$('#r_test').checked=!on}}
+function setFollow(on){LS['wc.follow']=on?'1':'0';lastId=null;qClear();rlog(on?'Following the game':'Stopped following')}
+/* map the game's narration lines to room modes (never replays old lines: it starts from "now") */
+/* each row: pattern, mode, spotlight, force, now (now = clears anything still waiting and plays straight away) */
+const MAP=[[/^Night falls/,'night',0,0,1],[/Werewolves have silently chosen/,'wolves',1],[/^The Seer has selected/,'seer',1],[/^The (Potion Maker|Witch) has made/,'witch',1],[/^The Doctor has chosen/,'doctor',1],[/^The Baker has prepared/,'feast',1],[/^Cupid has chosen/,'cupid',1],[/^The (Spell Caster|Wizard) has examined/,'spellcaster',1],[/^The Curmudgeon has chosen/,'curmudgeon',1],[/^The Masons have recognised/,'masons',1],[/^Dawn breaks/,'dawn'],[/^The village gathers/,'gather'],[/was devoured by the wolves/,'death-wolves'],[/was found dead/,'death-poison'],[/was lynched by the village|was shot by the Hunter|died of a broken heart/,'death'],[/^The vote is tied/,'tied'],[/reveals an? .* card\. The village pardons/,'pardon'],[/^The Baker.s feast protects/,'feast'],[/^It is time to vote/,'vote',0,0,1],[/^The vote is ending in 30/,'vote',0,1,1],[/The wolves are gone/,'victory-village'],[/^Love conquers all/,'victory-lovers'],[/The wolves have devoured the village/,'victory-wolves']];
+/* scenes play in story order: each one is held long enough to be seen before the next starts (shorter with quick narration) */
+const HOLD={wolves:17000,seer:15000,witch:15000,doctor:15000,feast:15000,cupid:13000,spellcaster:13000,curmudgeon:6000,masons:6000,'death-wolves':11000,'death-poison':11000,death:10000,hunter:11000,succession:7000,pardon:7000,tied:6000,dawn:20000},GATHER_HOLD=12000,DAWN_BEFORE_DEATH=7000,DEATHS=['death-wolves','death-poison','death'];let Q=[],qT=null,lastAct='';
+function qClear(){Q=[];clearTimeout(qT);qT=null}
+function enqueue(st){if(st.now)qClear();Q.push(st);if(!qT)pump()}
+function pump(){qT=null;const st=Q.shift();if(!st)return;
+ launch(st.m,{auto:true,force:st.force,nointro:st.nointro});clearTimeout(revertT);
+ if(st.spot)revertT=setTimeout(()=>{if(S&&S.phase==='night'&&roomMode===st.m)launch('night',{auto:true,nointro:true,force:true})},C.rev()*1000);
+ qT=setTimeout(pump,(st.hold??HOLD[st.m]??0)*(S&&S.fast?.4:1))}
+function follow(){if(!S)return;const narr=S.narr||[],top=narr.length?narr[narr.length-1].id:0;
+ if(S.phase!=='none')hadGame=true;
+ if(lastId===null){
+  lastId=top;lastPhase=S.phase;
+  if(C.follow()&&S.phase==='lobby')launch('lobby',{auto:true,force:true});
+  return;
+ }
+ if(!C.follow()){lastId=top;lastPhase=S.phase;return}
+ const fresh=narr.filter(x=>x.id>lastId);let steps=[];
+ if(S.phase==='lobby'&&lastPhase!=='lobby')steps.push({m:'lobby',force:true,now:true});
+ else if(lastPhase==='lobby'&&S.phase!=='lobby'&&S.phase!=='none')steps.push({m:'gather',force:true,hold:GATHER_HOLD});
+ for(const x of fresh)for(const [re,m,spot,force,now] of MAP)if(re.test(x.text)){if(!(spot&&!C.spot()))steps.push({m,spot,force,now});break}
+ const la=S.phase==='last'&&S.lastAct?S.lastAct.kind+S.lastAct.name:'';   /* a last act has begun: the Hunter's shot or the Leader's successor */
+ if(la&&la!==lastAct)steps.push({m:S.lastAct.kind==='hunter'?'hunter':'succession'});lastAct=la;
+ steps=steps.filter((s,i)=>!i||s.m!==steps[i-1].m);
+ steps.forEach((s,i)=>{if(i)s.now=0});   /* only the first scene of an update may cut in: a death plays before the Night that follows it */
+ if(steps.some(s=>DEATHS.includes(s.m)))steps.forEach(s=>{if(s.m==='dawn')s.hold=DAWN_BEFORE_DEATH});
+ if(fresh.some(x=>/^Everyone survived/.test(x.text)))steps.forEach(s=>{if(s.m==='dawn')s.nointro=1});   /* nobody died: no scream */
+ if(S.phase==='none'&&lastPhase&&lastPhase!=='none'&&hadGame&&C.rest()){roomRest();steps=[]}
+ lastId=top;lastPhase=S.phase;
+ steps.forEach(enqueue)}
+
+/* ---------- settings ---------- */
+function openSettings(){$('#s_api').value=LS['wc.api']||C.api();$('#s_rs').value=LS['wc.rs']||'';$('#s_tok').value=LS['wc.rtoken']||'';$('#s_pack').value=C.pack();$('#s_spot').checked=C.spot();$('#s_rev').value=C.rev();$('#s_noint').checked=C.noint();$('#s_rest').checked=C.rest();$('#settings').showModal()}
+function saveSettings(){LS['wc.api']=$('#s_api').value.trim();LS['wc.rs']=$('#s_rs').value.trim();LS['wc.rtoken']=$('#s_tok').value.trim();LS['wc.pack']=$('#s_pack').value.trim()||'werewolves';
+ LS['wc.spot']=$('#s_spot').checked?'1':'0';LS['wc.rev']=$('#s_rev').value||25;LS['wc.noint']=$('#s_noint').checked?'1':'0';LS['wc.rest']=$('#s_rest').checked?'1':'0';$('#settings').close();atmos();roomHealth();toast('Saved')}
+async function testRoom(){saveSettings();await roomHealth();openSettings()}
+
+/* ---------- atmosphere: background + banner from the theme pack, embers ---------- */
+function atmos(){const base=C.rs()+'/media/__theme__/'+encodeURIComponent(C.pack())+'/scenes/',r=document.documentElement.style;
+ r.setProperty('--bgimg',`url("${base}background.jpg")`);r.setProperty('--bannerimg',`url("${base}banner.jpg")`);
+ document.querySelectorAll('[data-icon]').forEach(i=>i.src=base+'werewolf-icon.png');$('#fav').href=base+'werewolf-icon.png'}
+(function(){const e=$('#embers');if(!e)return;const n=innerWidth<600?18:34;
+ for(let i=0;i<n;i++){const s=document.createElement('i');s.className='ember';
+  s.style.cssText=`--x:${Math.random()*100}%;--s:${(2+Math.random()*4).toFixed(1)}px;--d:${(9+Math.random()*13).toFixed(1)}s;--delay:${(-Math.random()*20).toFixed(1)}s;--dx:${(Math.random()*160-80).toFixed(0)}px`;e.appendChild(s)}})();
+atmos();
+
+if(tok&&C.api())start();else showLogin();
+</script></body></html>

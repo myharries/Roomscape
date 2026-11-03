@@ -283,6 +283,10 @@ const DEFAULT_SETTINGS = {
     /* v2.47 lighting ZONES — independently controllable per mode (profile.lightZones).
        Fill each zone with your HA light entity ids, e.g. main: ['light.living_room']. */
     lightZones: { main: [], accent: [] },
+    /* AFTER-DARK: room lights only come on while the sun is down (see conductor-lib/ha.js).
+       followZone lights take the mode's accent colour at followPct; restZones are the
+       zone overrides used in the At rest mode. Set on:false to switch the sun check off. */
+    afterDark: { on: true, sunEntity: 'sun.sun', followZone: 'accent', followPct: 100, restZones: { main: { brightness_pct: 60 } } },
     lightScenes: {                                   // light.turn_on payloads per engine light scene
       candle:   { brightness_pct: 18, color_temp_kelvin: 2000, transition: 2 },   // v2.47: pairs with effect:'candle'
       gallery:  { brightness_pct: 45, color_temp_kelvin: 2500, transition: 2 },
@@ -866,7 +870,7 @@ const ctx = {
 };
 const { MIME, serveFile, mediaSafe, themeSafe, photoSafe, listPhotos, buildManifest, manifestDirty, buildManifestCached, thumbOut, genThumb, warmThumbs } = require(path.join(LIB_DIR, 'media.js'))(ctx);   // RS-THEMES v1: + themeSafe
 const { wsAccept, encodeFrame, wsSend, handleUpgrade, onWsData, WS_MAX_BUF } = require(path.join(LIB_DIR, 'ws.js'))(ctx);
-const { haOn, haCfg, haFetch, haCall } = require(path.join(LIB_DIR, 'ha.js'))(ctx);
+const { haOn, haCfg, haFetch, haCall, afterDarkStatus, setBypass, startAfterDark } = require(path.join(LIB_DIR, 'ha.js'))(ctx);
 const { maCall, maItems, maImage } = require(path.join(LIB_DIR, 'music.js'))(ctx);
 const LIB_MODULES = ['media', 'ws', 'ha', 'music'];
 /* ==================== end conductor-lib wiring ==================== */
@@ -1227,7 +1231,7 @@ const HAS_APP = fs.existsSync(path.join(APP_DIR, 'app.html'));   // v1.4: Play &
    as a lens inside app.js; nothing links to a standalone page.) */
 const STATIC_PAGES = new Set([
   '/app.html', '/app.js', '/engine.js', '/fx.js', '/fx-audio.js',
-  '/frame.html', '/scores.html',
+  '/frame.html', '/scores.html', '/controller.html',
   '/favicon.ico', '/robots.txt'
 ]);
 const STATIC_DIRS = ['/app/', '/people/'];   // app/ = future split assets · people/ = score-card portraits written by POST /api/people/photo
@@ -1722,6 +1726,10 @@ function coreHandler(req, res) {
         sendJSON(res, 200, { ok: code >= 200 && code < 300, ha: code });
       });
     });
+    if (p === '/api/ha/afterdark') {                       // AFTER-DARK status, and the 30-minute test bypass
+      if (req.method !== 'POST') return sendJSON(res, 200, afterDarkStatus());
+      return readBody(req, (b) => sendJSON(res, 200, setBypass(!!(b || {}).bypass)));
+    }
     if (p === '/api/ha/lightscene' && req.method === 'POST') return readBody(req, (b) => {   // apply a named light scene now
       const ha = haCfg(); const sc = ha.lightScenes[(b || {}).scene];
       if (!sc) return sendJSON(res, 404, { ok: false, error: 'unknown scene' });
@@ -1765,6 +1773,12 @@ scanMedia(); scanOverlays();
 resolveFrameImages(state); resolveOverlays(state); resolveFx(state); state.chroma = settings.chroma; lastFxSig = state.game + '|' + state.mode;
 setTimeout(directorOnModeChange, 2000);   // v1.2: start the current mode's audio director after boot
 server.listen(PORT, () => {
+  /* AFTER-DARK: repaint the room when it gets dark during a mode, or when the test
+     bypass is switched on. A resting room is left alone at sunset. */
+  startAfterDark(function (why) {
+    if (why === 'sunset' && state.game === AT_REST) return;
+    lastHaSig = null; haApplyRoom();
+  });
   console.log('====================================================');
   console.log('  Roomscape Conductor  v5.05 (community v1.05)');   /* RS-SEC v1.01 (F14): the banner had been left at v4.74/v0.50 */
   console.log('  modules : ' + LIB_MODULES.join(', ') + '  (conductor-lib @ ' + LIB_DIR + ')');
@@ -2174,7 +2188,14 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
     haApplyRoom = function(){
       if (!haOn()) return;
       var ha = haCfg();
-      var zoneCfg = ((typeof effProfile === 'function' && effProfile(state.game)) || {}).lightZones || {};
+      var prof = (typeof effProfile === 'function' && effProfile(state.game)) || {};
+      var zoneCfg = prof.lightZones || {};
+      var ad = Object.assign({}, DEFAULT_SETTINGS.ha.afterDark, (settings.ha || {}).afterDark || {});
+      /* AFTER-DARK: At rest has its own zone levels, and the follow zone takes the
+         mode's accent colour unless the mode sets something for that zone itself. */
+      if (state.game === AT_REST) zoneCfg = Object.assign({}, ad.restZones || {}, zoneCfg);
+      var accent = /^#([0-9a-f]{6})$/i.exec(prof.accent || ''), fz = ad.followZone;
+      var follow = (accent && fz && (ha.zones[fz] || []).length && !zoneCfg[fz]) ? (ha.zones[fz] || []) : [];
       var sig = state.game + '|' + state.light + '|' + (state.live ? 1 : 0) + '|' + JSON.stringify(zoneCfg);
       if (sig === lastHaSig) return; lastHaSig = sig;
       var sc = ha.lightScenes[state.light];
@@ -2184,7 +2205,12 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
       var zoneEnts = []; Object.keys(ha.zones || {}).forEach(function(k){ zoneEnts = zoneEnts.concat(ha.zones[k] || []); });
       var overridden = {};
       Object.keys(zoneCfg).forEach(function(k){ var z = zoneCfg[k]; if (z && (z.scene || (z.effect && z.effect !== 'none') || z.brightness_pct != null)) (ha.zones[k] || []).forEach(function(en){ overridden[en] = 1; }); });
+      follow.forEach(function(en){ overridden[en] = true; });
       var baseTargets = ha.lights.concat(zoneEnts).filter(function(en, i, a){ return en && a.indexOf(en) === i && !overridden[en]; });
+      if (follow.length) {
+        var hex = parseInt(accent[1], 16);
+        haCall('light', 'turn_on', { entity_id: follow, rgb_color: [hex >> 16, (hex >> 8) & 255, hex & 255], brightness_pct: ad.followPct == null ? 100 : +ad.followPct, transition: (sc && sc.transition != null) ? sc.transition : 2 }, function(e){ if (e) console.log('[after-dark] follow:', e.message); });
+      }
       if (sc && baseTargets.length) haCall('light', 'turn_on', Object.assign({ entity_id: baseTargets }, sc), function(e){ if (e) console.log('[ha2.5] lights:', e.message); });
       Object.keys(ha.zones || {}).forEach(function(k){
         var z = zoneCfg[k], ents = (ha.zones || {})[k] || [], FL = global.__rsFlicker;

@@ -5063,6 +5063,19 @@
     if (auto && auto.weather) $('#wxnow').textContent = auto.weather.ha ? ('HA says: ' + (auto.weather.cond || 'unknown') + (auto.weather.effect ? ' → ' + auto.weather.effect.split('/').pop() : ' (no matching effect)')) : 'Home Assistant not connected yet';
   }
   var calBtn = $('#calbtn'); if (calBtn) calBtn.onclick = openCalendar;
+  /* AFTER-DARK: top-bar switch for the 30-minute daylight test of the room lights */
+  (function () {
+    var b = $('#darkbtn'), cur = null; if (!b) return;
+    function show(s) {
+      cur = s; b.style.display = s.on ? '' : 'none'; b.textContent = s.bypass ? '💡' : '🌙';
+      b.style.borderColor = s.bypass ? 'var(--teal)' : '';
+      b.title = s.bypass ? 'Testing lights in daylight (' + Math.ceil(s.bypassLeftS / 60) + ' min left). Click to stop.'
+        : (s.dark ? 'After dark: room lights are on duty. Click to bypass the check for a test.' : 'Sun is up: room lights stay off. Click to test them for 30 minutes.');
+    }
+    function load() { api('/api/ha/afterdark').then(show).catch(function () { b.style.display = 'none'; }); }
+    b.onclick = function () { post('/api/ha/afterdark', { bypass: !(cur && cur.bypass) }).then(show).catch(function (e) { toast(e.message || 'Could not change the light test'); }); };
+    load(); setInterval(load, 60000);
+  })();
 
   /* ---------------- settings sheet (globals) ---------------- */
   $('#gear').onclick = function () {

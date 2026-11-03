@@ -1,5 +1,14 @@
 # Changelog
 
+
+## Unreleased: after-dark lights
+
+- Room lights (`ha.lights` and every zone) only turn on while `sun.sun` is below the horizon. Set `ha.afterDark.on` to `false` to switch this off.
+- The `accent` zone follows each mode's accent colour at 100%.
+- At rest sets the `main` zone to 60% (`ha.afterDark.restZones`).
+- A 30-minute daylight test bypass is available from the app's top bar, the Werewolf Controller and `POST /api/ha/afterdark`.
+- The app's top bar links to `controller.html`.
+
 ## 1.05 — 2026-08-25 (conductor v5.05)
 
 **The two remaining High findings, and the repo plumbing for a public release.**

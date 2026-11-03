@@ -1,5 +1,7 @@
 /* ===================================================================
-   conductor-lib/ha.js  v1.1
+   conductor-lib/ha.js  v1.2
+   v1.2: AFTER-DARK — light.turn_on for the room's lights is held back while
+        the sun is up. See the block above haCall.
    v1.1 (RS-SEC v1.01, F13): haFetch caps the buffered response (4 MB) and
         adds an absolute 20 s deadline on top of the inactivity timeout.
    Extracted verbatim from conductor.js v2.62 (RoomScape Conductor v3.62 split).
@@ -69,7 +71,52 @@ module.exports = function (ctx) {
     if (body) req2.write(JSON.stringify(body));
     req2.end();
   }
-  function haCall(domain, service, data, cb) { haFetch('POST', '/api/services/' + domain + '/' + service, data || {}, cb); }
+  /* AFTER-DARK: every light command in the Conductor goes through haCall, so this
+     one gate covers modes, intros, moments, flicker and the Lights tab. While the
+     sun is up, light.turn_on is dropped for the room's own lights (ha.lights and
+     every zone). Turning lights OFF and other entities are never touched. If
+     sun.sun cannot be read the lights are allowed, so a broken sensor cannot
+     silently disable the room. The test bypass expires by itself. */
+  const BYPASS_MS = 30 * 60 * 1000;
+  let sunUp = null, bypassUntil = 0, sunTimer = null, onChange = function () {};
+  function adCfg() { return Object.assign({}, DEFAULT_SETTINGS.ha.afterDark, (ctx.settings().ha || {}).afterDark || {}); }
+  function bypassed() { return Date.now() < bypassUntil; }
+  function lightsAllowed() { return !adCfg().on || sunUp !== true || bypassed(); }
+  function roomLights() {
+    const h = haCfg(), a = (h.lights || []).slice();
+    Object.keys(h.zones || {}).forEach(function (k) { (h.zones[k] || []).forEach(function (en) { if (a.indexOf(en) < 0) a.push(en); }); });
+    return a;
+  }
+  function pollSun(cb) {
+    if (!haOn() || !adCfg().on) return cb && cb();
+    haFetch('GET', '/api/states/' + (adCfg().sunEntity || 'sun.sun'), null, function (e, code, d) {
+      const next = (!e && code === 200 && d && d.state) ? d.state === 'above_horizon' : null;
+      const was = sunUp; sunUp = next;
+      if (was === true && next === false) onChange('sunset');
+      if (cb) cb();
+    });
+  }
+  function afterDarkStatus() {
+    return { ok: true, on: !!adCfg().on, sunUp: sunUp, dark: sunUp === false, allowed: lightsAllowed(), bypass: bypassed(),
+             bypassLeftS: bypassed() ? Math.ceil((bypassUntil - Date.now()) / 1000) : 0 };
+  }
+  function setBypass(on) {
+    bypassUntil = on ? Date.now() + BYPASS_MS : 0;
+    if (on) onChange('bypass');
+    return afterDarkStatus();
+  }
+  function startAfterDark(fn) {
+    onChange = fn || onChange; pollSun();
+    if (!sunTimer) { sunTimer = setInterval(pollSun, 60000); if (sunTimer.unref) sunTimer.unref(); }
+  }
+  function haCall(domain, service, data, cb) {
+    if (domain === 'light' && service === 'turn_on' && data && data.entity_id && !lightsAllowed()) {
+      const room = roomLights(), ents = [].concat(data.entity_id), keep = ents.filter(function (en) { return room.indexOf(en) < 0; });
+      if (!keep.length) return cb && cb(null, 200, null);          // nothing to do: looks like success to the caller
+      data = Object.assign({}, data, { entity_id: keep });
+    }
+    haFetch('POST', '/api/services/' + domain + '/' + service, data || {}, cb);
+  }
 
-  return { haOn, haCfg, haFetch, haCall };
+  return { haOn, haCfg, haFetch, haCall, afterDarkStatus, setBypass, startAfterDark };
 };
