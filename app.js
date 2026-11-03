@@ -6153,8 +6153,8 @@
 
   // Rebuild + persist one mode's poster from its current (freshly-read) profile.
   // Shared by "Capture this mode" and the auto-on-save hook. Returns true on success.
-  async function regenMode(id){
-    if(!id) return false;
+  async function regenMode(id,force){
+    if(!id||(!force&&isCustom(id))) return false;
     var ok=await ensureIndex(true); if(!ok || !RS.profiles[id]) return false;   // force: pick up the just-saved profile
     var url=await composeMode(RS.profiles[id]); if(!url) return false;
     RS.posters[id]=url;
@@ -6163,10 +6163,43 @@
     return !!(j&&j.ok);
   }
 
+  /* chosen thumbnails: ";custom=1" in the data URL marks a picture the user picked, so automatic rebuilds keep it */
+  function isCustom(id){ return String(RS.posters[id]||'').indexOf(';custom=1;')>=0; }
+  function choosePicture(modeId, file){
+    if(!modeId||!file) return;
+    createImageBitmap(file).then(function(img){
+      var c=document.createElement('canvas'); c.width=640; c.height=400;
+      var s=Math.max(c.width/img.width,c.height/img.height), w=img.width*s, h=img.height*s;
+      c.getContext('2d').drawImage(img,(c.width-w)/2,(c.height-h)/2,w,h);
+      var url=c.toDataURL('image/jpeg',0.85).replace('data:image/jpeg;','data:image/jpeg;custom=1;');
+      return api('/api/modeposters',{id:modeId,data:url}).then(function(j){
+        if(!j||!j.ok) throw new Error('save failed');
+        RS.posters[modeId]=url;
+        cardEls().forEach(function(x){ if(x.dataset.id===modeId) delete x.dataset.rsposter; }); paintCards();
+        banner('Picture saved.','ok');
+      });
+    }).catch(function(){ banner('Could not use that picture.','err'); });
+  }
+  function pictureRow(){
+    var row=document.createElement('div'); row.style.cssText='display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:12px';
+    var sel=document.createElement('select'); sel.id='rs-pic-mode'; sel.style.cssText='max-width:100%';
+    function fill(){
+      var cur=sel.value; sel.innerHTML='';
+      api('/api/profiles').then(function(p){
+        var ps=(p&&p.profiles)||{};
+        Object.keys(ps).filter(function(k){ return k.charAt(0)!=='_' && !ps[k].deleted; }).forEach(function(k){ sel.add(new Option(ps[k].name||k,k)); });
+        sel.value=cur||currentModeId()||sel.value;
+      }).catch(function(){});
+    }
+    var inp=document.createElement('input'); inp.type='file'; inp.accept='image/*'; inp.style.display='none';
+    inp.onchange=function(){ choosePicture(sel.value,inp.files[0]); inp.value=''; };
+    row.appendChild(sel); row.appendChild(mkBtn('Choose a picture…',function(){ inp.click(); })); row.appendChild(inp);
+    fill(); return row;
+  }
   async function captureThis(){
     var id=currentModeId(); if(!id){ banner('Open a mode first.','err'); return; }
     banner('Building preview for "'+id+'"...');
-    var okc=await regenMode(id);
+    var okc=await regenMode(id,true);
     if(okc) banner('Thumbnail updated for "'+id+'".','ok');
     else banner('This mode has no scene images to preview (or save failed).','err');
   }
@@ -6213,7 +6246,7 @@
     // an auto-poster, so re-running refreshes previously-generated tiles too)
     cards.forEach(function(c){ var b=c.dataset.rsbase; if(!b){ var cur=c.style.backgroundImage||''; if(cur.indexOf('data:')<0) b=cur; } if(!b||b.indexOf('data:')>=0) return; (groups[b]=groups[b]||[]).push(c.dataset.id); });
     var targets=[]; Object.keys(groups).forEach(function(k){ if(groups[k].length>=2) targets=targets.concat(groups[k]); });
-    targets=targets.filter(function(v,i,a){return a.indexOf(v)===i;});
+    targets=targets.filter(function(v,i,a){return a.indexOf(v)===i && !isCustom(v);});
     if(!targets.length){ banner('No look-alike tiles to fill.','ok'); return; }
     var bulk={}, done=0, fail=0;
     for(var i=0;i<targets.length;i++){
@@ -6229,7 +6262,7 @@
   async function rebuildAll(){
     banner('Reading library...');
     var ok=await ensureIndex(); if(!ok){ banner('Could not read the library.','err'); return; }
-    var ids=Object.keys(RS.posters); if(!ids.length){ banner('No auto thumbnails to rebuild yet.','ok'); return; }
+    var ids=Object.keys(RS.posters).filter(function(k){ return !isCustom(k); }); if(!ids.length){ banner('No auto thumbnails to rebuild yet.','ok'); return; }
     var bulk={}, done=0, fail=0;
     for(var i=0;i<ids.length;i++){
       var id=ids[i]; banner('Rebuilding... '+(i+1)+' / '+ids.length);
@@ -6275,6 +6308,7 @@
     card.appendChild(mkBtn('Fill in look-alike tiles', fillLookalikes));
     card.appendChild(mkBtn('Rebuild all auto thumbnails', rebuildAll));
     card.appendChild(mkBtn('Remove this mode’s thumbnail', removeThis));
+    card.appendChild(pictureRow());
     setup.appendChild(card);
   }
 
