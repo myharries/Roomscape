@@ -285,8 +285,8 @@ const DEFAULT_SETTINGS = {
     lightZones: { main: [], accent: [] },
     /* AFTER-DARK: room lights only come on while the sun is down (see conductor-lib/ha.js).
        followZone lights take the mode's accent colour at followPct; restZones are the
-       zone overrides used in the At rest mode. Set on:false to switch the sun check off. */
-    afterDark: { on: true, sunEntity: 'sun.sun', followZone: 'accent', followPct: 100, restZones: { main: { brightness_pct: 60 } } },
+       zone overrides used in the At rest mode (a zone set here skips the accent colour). Set on:false to switch the sun check off. */
+    afterDark: { on: true, sunEntity: 'sun.sun', followZone: 'accent', followPct: 100, restZones: { main: { brightness_pct: 60 }, accent: { effect: 'cyan_fade', brightness_pct: 100 } } },
     lightScenes: {                                   // light.turn_on payloads per engine light scene
       candle:   { brightness_pct: 18, color_temp_kelvin: 2000, transition: 2 },   // v2.47: pairs with effect:'candle'
       gallery:  { brightness_pct: 45, color_temp_kelvin: 2500, transition: 2 },
@@ -1773,12 +1773,9 @@ scanMedia(); scanOverlays();
 resolveFrameImages(state); resolveOverlays(state); resolveFx(state); state.chroma = settings.chroma; lastFxSig = state.game + '|' + state.mode;
 setTimeout(directorOnModeChange, 2000);   // v1.2: start the current mode's audio director after boot
 server.listen(PORT, () => {
-  /* AFTER-DARK: repaint the room when it gets dark during a mode, or when the test
-     bypass is switched on. A resting room is left alone at sunset. */
-  startAfterDark(function (why) {
-    if (why === 'sunset' && state.game === AT_REST) return;
-    lastHaSig = null; haApplyRoom();
-  });
+  /* AFTER-DARK: repaint the room when it gets dark, or when the test bypass is
+     switched on, so At rest and a running mode both pick up their lights. */
+  startAfterDark(function () { lastHaSig = null; haApplyRoom(); });
   console.log('====================================================');
   console.log('  Roomscape Conductor  v5.05 (community v1.05)');   /* RS-SEC v1.01 (F14): the banner had been left at v4.74/v0.50 */
   console.log('  modules : ' + LIB_MODULES.join(', ') + '  (conductor-lib @ ' + LIB_DIR + ')');

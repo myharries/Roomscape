@@ -5,7 +5,7 @@
 
 - Room lights (`ha.lights` and every zone) only turn on while `sun.sun` is below the horizon. Set `ha.afterDark.on` to `false` to switch this off.
 - The `accent` zone follows each mode's accent colour at 100%.
-- At rest sets the `main` zone to 60% (`ha.afterDark.restZones`).
+- At rest sets the `main` zone to 60% and runs the `cyan_fade` effect on the `accent` zone (`ha.afterDark.restZones`), including at sunset.
 - A 30-minute daylight test bypass is available from the app's top bar, the Werewolf Controller and `POST /api/ha/afterdark`.
 - The app's top bar links to `controller.html`.
 
