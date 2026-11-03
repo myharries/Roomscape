@@ -1584,7 +1584,8 @@ function phUrl(ph, wPct) {                            // ALWAYS server-resize (s
           var el = D.createElement('div');
           el.className = 'ie-phcell ' + (L.border || '') + (cfg.matStyle === 'recessed' ? ' rec' : '');
           el.style.cssText = 'left:' + c.x.toFixed(2) + '%;top:' + c.y.toFixed(2) + '%;width:' + c.w.toFixed(2) + '%;height:' + c.h.toFixed(2) + '%' + (c.rot ? ';transform:rotate(' + c.rot.toFixed(1) + 'deg)' : '') + (L.tet ? ';visibility:hidden' : '');
-          el.innerHTML = '<div class="ie-phimg" style="transition-duration:' + fadeS + 's"></div><div class="ie-phimg" style="transition-duration:' + fadeS + 's"></div>' + (cfg.matStyle === 'recessed' ? '<div class="ie-phshade"></div>' : '');
+          var phSty = 'transition-duration:' + fadeS + 's' + (L.cells.length === 1 ? ';background-size:contain;background-repeat:no-repeat' : '');   /* single-photo layouts show the whole photo */
+          el.innerHTML = '<div class="ie-phimg" style="' + phSty + '"></div><div class="ie-phimg" style="' + phSty + '"></div>' + (cfg.matStyle === 'recessed' ? '<div class="ie-phshade"></div>' : '');
           host.appendChild(el);
           return { el: el, imgs: el.children, front: 0, k: null, w: c.w, yh: c.y + c.h, pos: order.pos[s], s: s };
         });
