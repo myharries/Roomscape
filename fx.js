@@ -1500,7 +1500,7 @@ function phUrl(ph, wPct) {                            // ALWAYS server-resize (s
       if (!photos.length) { if (!host._empty) { host._empty = 1; host.innerHTML = '<div class="ie-phempty">No photos in Photos/' + (cfg.dir || '?') + '</div>'; } return; }
       var idx = view.idx, mode = cfg.swap || 'sparkle';
       var fadeS = Math.max(0.2, Math.min(20, cfg.fadeS || 1.2));
-      var geoSig = [cfg.layout, cfg.dir, mode, cfg.perFrame, fadeS, photos.length, cfg.matStyle || ''].join('|');
+      var geoSig = [cfg.layout, cfg.dir, mode, cfg.perFrame, fadeS, photos.length, cfg.matStyle || '', cfg.fit || ''].join('|');
       function cellK(cell) { return mode === 'all' ? tick : Math.floor((tick - cell.pos) / host._bands); }
       function setImg(cell, k, fade) {
         var ph = phPick(photos, cfg, k, cell.s, idx, host._cells.length); if (!ph) return;
@@ -1584,7 +1584,7 @@ function phUrl(ph, wPct) {                            // ALWAYS server-resize (s
           var el = D.createElement('div');
           el.className = 'ie-phcell ' + (L.border || '') + (cfg.matStyle === 'recessed' ? ' rec' : '');
           el.style.cssText = 'left:' + c.x.toFixed(2) + '%;top:' + c.y.toFixed(2) + '%;width:' + c.w.toFixed(2) + '%;height:' + c.h.toFixed(2) + '%' + (c.rot ? ';transform:rotate(' + c.rot.toFixed(1) + 'deg)' : '') + (L.tet ? ';visibility:hidden' : '');
-          var phSty = 'transition-duration:' + fadeS + 's' + (L.cells.length === 1 ? ';background-size:contain;background-repeat:no-repeat' : '');   /* single-photo layouts show the whole photo */
+          var phSty = 'transition-duration:' + fadeS + 's' + ((cfg.fit ? cfg.fit === 'whole' : L.cells.length === 1) ? ';background-size:contain;background-repeat:no-repeat' : '');   /* single-photo layouts show the whole photo */
           el.innerHTML = '<div class="ie-phimg" style="' + phSty + '"></div><div class="ie-phimg" style="' + phSty + '"></div>' + (cfg.matStyle === 'recessed' ? '<div class="ie-phshade"></div>' : '');
           host.appendChild(el);
           return { el: el, imgs: el.children, front: 0, k: null, w: c.w, yh: c.y + c.h, pos: order.pos[s], s: s };

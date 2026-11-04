@@ -4218,6 +4218,7 @@
             { v: 'sparkle', l: 'Sparkle — random cell' }, { v: 'cascade', l: 'Cascade' }, { v: 'rows', l: 'Sweep rows' }, { v: 'cols', l: 'Sweep columns' }, { v: 'diag', l: 'Sweep diagonal' }, { v: 'centre', l: 'Centre out' }, { v: 'all', l: 'All together' }
           ], ph.swap || 'sparkle') + '</select></label></div>'
         + '<label class="fld"><span>Frame style' + T('Print on mat lays each photo ON TOP of its white card, drop shadow under the print. Behind mat sinks the photo beneath a white mount with a cut-out window \u2014 the mat casts a soft shadow onto the photo, like a real window-mounted frame.') + '</span><select data-ph="matStyle">' + opt([{ v: 'print', l: 'Print on mat' }, { v: 'recessed', l: 'Behind mat (recessed)' }], ph.matStyle || 'print') + '</select></label>'
+        + '<label class="fld"><span>Photo fit' + T('Whole photo shows all of each photo, with space around it if the shape differs. Fill and crop fills each slot and trims the edges. Automatic shows the whole photo in single-photo layouts and crops the others.') + '</span><select data-ph="fit">' + opt([{ v: '', l: 'Automatic' }, { v: 'whole', l: 'Whole photo' }, { v: 'cover', l: 'Fill and crop' }], ph.fit || '') + '</select></label>'
         + ((ph.layout === 'stack') ? '<label class="fld"><span>Stack #</span><input type="number" data-ph="perFrame" min="2" max="4" value="' + (ph.perFrame || 3) + '"></label>' : '');
     } else if (same && kind === 'viz') {
       var vz = p.frameViz[sel[0]] || defVizCfg();
