@@ -4888,14 +4888,14 @@
   function weatherCard() {
     var w = settings.weather || { on: false };
     var conds = ['rainy', 'pouring', 'lightning', 'snowy', 'fog'];
-    return '<div class="card"><div class="zt">⛅ The sky' + T('The windows follow the real sky: your Home Assistant weather entity picks a matching effect loop (by filename keywords — rain/heavy/storm/snow/fog) on frames whose effect slot is empty. Hand-picked effects always win. Storms fire occasional lightning.') + '</div>'
+    return '<div class="card"><div class="zt">⛅ The sky' + T('The windows follow the real sky: your Home Assistant weather entity picks a matching effect loop (by filename keywords — rain/heavy/storm/thunder/lightning/snow/fog) on frames whose effect slot is empty. Hand-picked effects always win. Storms fire occasional lightning.') + '</div>'
       + '<label class="chk"><input type="checkbox" id="wxon" ' + (w.on ? 'checked' : '') + '> Windows follow real weather</label>'
       + '<div class="r2"><label class="fld"><span>Weather entity</span><input type="text" id="wxent" value="' + esc(w.entity || 'weather.home') + '"></label>'
       + '<label class="chk" style="margin-top:20px"><input type="checkbox" id="wxsun" ' + (w.sunTone !== false ? 'checked' : '') + '> Daylight sync' + T('Nudges the print tone with the real sun — slightly warmer and dimmer at dusk and dawn, neutral at midday.') + '</label></div>'
       + '<div class="zt" style="margin-top:6px">Try it now' + T('Tap a condition to preview it on the wall for 30 seconds, or Pin for the evening (2 h) — snow tonight because the kids asked. Clear removes a pin.') + '</div>'
       + '<div class="chips">' + conds.map(function (c) { return '<button class="chip" data-wxp="' + c + '">' + c + '</button>'; }).join('')
       + '<button class="chip" data-wxpin="1">📌 Pin 2h</button><button class="chip" data-wxclr="1">Clear</button></div>'
-      + '<div class="hint" id="wxnow" style="margin-top:6px"></div></div>';
+      + '<div class="hint" id="wxnow" style="margin-top:6px"></div><div class="hint" id="wxclips" style="margin-top:6px;line-height:1.6"></div></div>';
   }
   var wxLastCond = 'snowy';
   function saveAuto() { clearTimeout(saveAuto._t); saveAuto._t = setTimeout(function () { persist().then(function () { toast('Saved'); renderAuto(); }); }, 800); }
@@ -5061,6 +5061,7 @@
     var wp = $('#sheet [data-wxpin]'); if (wp) wp.onclick = function () { post('/api/weather/preview', { cond: wxLastCond, minutes: 120 }).then(function () { toast(wxLastCond + ' pinned for 2 h'); }); };
     var wc = $('#sheet [data-wxclr]'); if (wc) wc.onclick = function () { post('/api/weather/preview', { off: true }).then(function () { toast('Back to the real sky'); }); };
     if (auto && auto.weather) $('#wxnow').textContent = auto.weather.ha ? ('HA says: ' + (auto.weather.cond || 'unknown') + (auto.weather.effect ? ' → ' + auto.weather.effect.split('/').pop() : ' (no matching effect)')) : 'Home Assistant not connected yet';
+    if (auto && auto.weather && auto.weather.clips && $('#wxclips')) $('#wxclips').innerHTML = auto.weather.clips.map(function (c) { return '<div>' + esc(c.cond) + ' → ' + esc(c.clip || 'no clip') + (c.also.length ? ' <span style="color:var(--gold)">⚠ also matches: ' + esc(c.also.join(', ')) + '</span>' : '') + '</div>'; }).join('');
   }
   var calBtn = $('#calbtn'); if (calBtn) calBtn.onclick = openCalendar;
   /* AFTER-DARK: top-bar switch for the 30-minute daylight test of the room lights */

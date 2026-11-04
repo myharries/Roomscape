@@ -1089,11 +1089,22 @@ function autoMapCondition(cond) {
   const files = effectFiles();
   const pick = (re) => { const f = files.find((x) => re.test(x.toLowerCase())); return f ? 'effects/' + f : null; };
   if (/pouring/.test(cond)) return pick(/heavy|pour|storm/) || pick(/rain|drizzle/);
-  if (/lightning/.test(cond)) return pick(/storm|thunder/) || pick(/heavy/) || pick(/rain/);
+  if (/lightning/.test(cond)) return pick(/storm|thunder|lightning/) || pick(/heavy/) || pick(/rain/);
   if (/rain/.test(cond)) return pick(/drizzle/) || pick(/rain/);
   if (/snow/.test(cond)) return pick(/snow/);
   if (/fog|mist/.test(cond)) return pick(/fog|mist/);
   return null;
+}
+/* The sky: which clip each weather type uses, plus any other files matching the same keyword */
+function weatherClips() {
+  const rules = { rainy: [/drizzle/, /rain/], pouring: [/heavy|pour|storm/, /rain|drizzle/], lightning: [/storm|thunder|lightning/, /heavy/, /rain/], snowy: [/snow/], fog: [/fog|mist/] };
+  const files = effectFiles(), mapped = !!(settings.weather || {}).map;
+  return Object.keys(rules).map(function (cond) {
+    const eff = autoMapCondition(cond), clip = eff ? eff.split('/').pop() : null;
+    const re = rules[cond].find(function (r) { return files.some(function (f) { return r.test(f.toLowerCase()); }); });
+    const also = (!mapped && re) ? files.filter(function (f) { return f !== clip && re.test(f.toLowerCase()); }) : [];
+    return { cond: cond, clip: clip, also: also };
+  });
 }
 let stormTimer = null;
 function pollWeather() {
@@ -1489,7 +1500,7 @@ function coreHandler(req, res) {
       const t = rhythmTarget(), nx = (settings.rhythms || {}).on ? rhythmNextChange() : null;
       return sendJSON(res, 200, { ok: true, rhythmsOn: !!(settings.rhythms || {}).on, ambient: isAmbient(), game: state.game,
         target: t, next: nx, holdUntil: holdUntil, special: t && t.special || null,
-        weather: { on: !!(settings.weather || {}).on, cond: weather.cond, effect: weather.effect, pinnedUntil: weather.pinnedUntil, ha: haOn() },
+        weather: { on: !!(settings.weather || {}).on, cond: weather.cond, effect: weather.effect, pinnedUntil: weather.pinnedUntil, ha: haOn(), clips: weatherClips() },
         schedule: Array.isArray(settings.schedule) ? settings.schedule : [],                                   // v2.62 autopilot v2
         sunShift: Object.assign({ on: false, offsetMin: 0 }, settings.sunShift || {}) });                      // v2.62 autopilot v2
     }

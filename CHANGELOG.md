@@ -14,6 +14,7 @@
 - Single-photo layouts show the whole photo, so portrait photos are no longer cropped on landscape screens.
 - Adds a Roomscape icon (`icons/`) for the browser tab, home screen and Docker.
 - Settings > Setup > Library & previews can set a mode's thumbnail from your own picture, which automatic rebuilds keep.
+- Weather effects accept `lightning` in a filename, and The sky lists each weather type's clip with a warning when several files match.
 
 ## 1.05 — 2026-08-25 (conductor v5.05)
 
