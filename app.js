@@ -8223,3 +8223,69 @@
     });
   } catch (e) {}
 })();
+
+/* ================= SAVED SETUPS: top-bar switch and Settings card ================= */
+;(function () {
+  var D = document, data = null;
+  function say(m) { if (window.__rsToast) window.__rsToast(m); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function send(body) {
+    return fetch('/api/setups', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+      .then(function (r) { return r.json().catch(function () { return {}; }).then(function (j) { if (!r.ok || !j.ok) throw new Error(j.error || ('HTTP ' + r.status)); return j; }); });
+  }
+  function load() { return fetch('/api/setups', { cache: 'no-store' }).then(function (r) { return r.json(); }).then(function (j) { if (j && j.ok) { data = j; paintSwitch(); paintCard(); } }).catch(function () {}); }
+  function use(id) {
+    return send({ activate: id }).then(function (j) {
+      data = j; paintSwitch(); paintCard();
+      say('Using ' + (j.list.find(function (s) { return s.id === id; }) || {}).name);
+    }).catch(function (e) { say('Could not switch: ' + e.message); paintSwitch(); });
+  }
+  function paintSwitch() {
+    var gear = D.getElementById('gear'); if (!gear || !data) return;
+    var sel = D.getElementById('rs-setup');
+    if (!sel) {
+      sel = D.createElement('select'); sel.id = 'rs-setup'; sel.title = 'Saved setup';
+      sel.style.cssText = 'max-width:170px;padding:8px 9px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:inherit;font:inherit;font-size:13px;margin-right:6px';
+      sel.onchange = function () { use(sel.value); };
+      gear.parentNode.insertBefore(sel, D.getElementById('calbtn') || gear);
+    }
+    sel.innerHTML = data.list.map(function (s) { return '<option value="' + esc(s.id) + '">' + esc(s.name) + '</option>'; }).join('');
+    sel.value = data.active;
+  }
+  function row(s, i, zones) {
+    return '<div data-i="' + i + '" style="border-top:1px solid var(--line);padding:10px 0">'
+      + '<div style="display:flex;gap:8px;align-items:center"><input data-f="name" value="' + esc(s.name) + '" style="flex:1" aria-label="Setup name">'
+      + '<button type="button" class="btn sm" data-use="' + esc(s.id) + '"' + (s.id === data.active ? ' disabled' : '') + '>' + (s.id === data.active ? 'In use' : 'Use') + '</button>'
+      + '<button type="button" class="btn sm gh" data-del="' + i + '">✕</button></div>'
+      + zones.map(function (z) { return '<label class="fld"><span>' + esc(z) + ' lights</span><input data-z="' + esc(z) + '" value="' + esc(((s.zones || {})[z] || []).join(', ')) + '" placeholder="light.example, light.other"></label>'; }).join('')
+      + '</div>';
+  }
+  function paintCard() {
+    var c = D.getElementById('rs-setups-body'); if (!c || !data) return;
+    var zones = data.zoneNames.length ? data.zoneNames : ['main', 'accent'];
+    c.innerHTML = data.list.map(function (s, i) { return row(s, i, zones); }).join('')
+      + '<div style="margin-top:10px"><button type="button" class="btn sm" id="rs-setup-add">＋ Add setup</button> <button type="button" class="btn sm" id="rs-setup-save">Save setups</button></div>';
+    c.querySelectorAll('[data-use]').forEach(function (b) { b.onclick = function () { use(b.dataset.use); }; });
+    c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function () { var l = read(); if (l.length < 2) return say('Keep at least one setup'); l.splice(+b.dataset.del, 1); data.list = l; paintCard(); }; });
+    D.getElementById('rs-setup-add').onclick = function () { var l = read(); l.push({ name: 'New setup', zones: {} }); data.list = l; paintCard(); };
+    D.getElementById('rs-setup-save').onclick = function () { send({ list: read() }).then(function (j) { data = j; paintSwitch(); paintCard(); say('Setups saved'); }).catch(function (e) { say('Not saved: ' + e.message); }); };
+  }
+  function list(v) { return String(v || '').split(/[\s,]+/).filter(Boolean); }
+  function read() {
+    return [].map.call(D.querySelectorAll('#rs-setups-body [data-i]'), function (r) {
+      var old = data.list[+r.dataset.i] || {}, zones = {};
+      r.querySelectorAll('[data-z]').forEach(function (i) { zones[i.dataset.z] = list(i.value); });
+      return { id: old.id, name: r.querySelector('[data-f=name]').value, zones: zones };
+    });
+  }
+  function inject() {
+    var setup = D.querySelector('.setsec[data-sec="setup"]');
+    if (!setup || D.getElementById('rs-setups-card')) return;
+    var card = D.createElement('div'); card.className = 'card'; card.id = 'rs-setups-card';
+    card.innerHTML = '<div class="zt">Saved setups</div><div style="opacity:.7;font-size:12px;margin:2px 0 6px">Each setup has its own room lights. Switching turns off lights that aren’t in the new setup, and leaves your TVs alone. Separate light ids with commas.</div><div id="rs-setups-body"></div>';
+    setup.insertBefore(card, setup.firstChild);
+    paintCard();
+  }
+  new MutationObserver(inject).observe(D.body, { childList: true, subtree: true });
+  load();
+})();

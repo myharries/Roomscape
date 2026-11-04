@@ -1445,6 +1445,7 @@ function coreHandler(req, res) {
           settings.music.token = prevTok;
         }
       }
+      if (global.__rsSetupHa) { const sh = global.__rsSetupHa(); if (sh) settings.ha = Object.assign({}, settings.ha, sh); }   // Saved setups: a stale tab can't undo a switch
       // v2.52: 'dining' is the shipped at-rest/panic profile — applyProfile falls
       // back to it when the AT_REST id is missing, so it must always exist. The
       // pguard wipe-block only rejects payloads missing ≥2 modes, so a payload
@@ -6107,4 +6108,101 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
 
     console.log('[setup-api] RS-SETUP-API v1 ready — GET /api/ha/entities?domain= · POST /api/config');
   } catch (e) { try { console.error('[setup-api] init failed:', e && e.message); } catch (x) {} }
+})();
+
+/* ================= SAVED SETUPS =================
+   One layout, several saved sets of room lights; one set is in use at a time.
+   TVs are left alone: they are turned on and off by hand.
+     GET  /api/setups                 -> { ok, active, applied, zoneNames, list:[{id,name,zones}] }
+     POST /api/setups {list:[...]}    -> save the definitions
+     POST /api/setups {activate:id}   -> switch: swap the lights and turn off the ones left behind
+   Nothing changes until the first switch. Definitions live in data/setups.json;
+   the lights in use live in config.json so they survive a restart. */
+;(function () {
+  try {
+    var R = global.__rsRouter; if (!R) { console.log('[setups] router missing — skipped'); return; }
+    var FILE = dataStore('setups.json'), ENT = /^[a-z_]+\.[a-z0-9_]+$/;
+    var cfgFile = process.env.CONFIG_FILE || path.join(APP_DIR, 'config.json'), store = null;
+    function flat(z) { var a = []; Object.keys(z || {}).forEach(function (k) { (z[k] || []).forEach(function (en) { if (a.indexOf(en) < 0) a.push(en); }); }); return a; }
+    function seed() {
+      var ha = haCfg(), now = JSON.parse(JSON.stringify(ha.zones || {}));
+      if (!now.main) now.main = []; if (!now.accent) now.accent = [];
+      flat({ l: ha.lights }).forEach(function (en) { if (flat(now).indexOf(en) < 0) now.main.push(en); });
+      return { active: 'entertaining', applied: false, list: [
+        { id: 'master-bedroom', name: 'Master Bedroom', zones: { main: [], accent: [] } },
+        { id: 'living-room', name: 'Living Room', zones: { main: now.main.slice(), accent: [] } },
+        { id: 'entertaining', name: 'Entertaining', zones: now }
+      ] };
+    }
+    function load() {
+      if (store) return store;
+      try { store = JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch (e) { store = null; }
+      if (!store || !Array.isArray(store.list)) store = seed();
+      return store;
+    }
+    function save() { fs.writeFileSync(FILE, JSON.stringify(store, null, 2)); }
+    function clean(list) {
+      if (!Array.isArray(list) || !list.length || list.length > 12) return 'need 1 to 12 setups';
+      var ids = {}, out = [], err = null;
+      list.forEach(function (s, i) {
+        var name = String((s && s.name) || '').trim().slice(0, 40); if (!name) { err = 'setup ' + (i + 1) + ' needs a name'; return; }
+        var id = String(s.id || name).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || ('setup-' + (i + 1));
+        if (ids[id]) { err = 'duplicate setup: ' + name; return; } ids[id] = 1;
+        var zones = {}; Object.keys(s.zones || {}).forEach(function (k) {
+          if (!/^[\w -]{1,30}$/.test(k)) { err = 'bad zone name: ' + k; return; }
+          zones[k] = (s.zones[k] || []).map(String); zones[k].forEach(function (en) { if (!ENT.test(en)) err = 'bad light id: ' + en; });
+        });
+        out.push({ id: id, name: name, zones: zones });
+      });
+      return err || out;
+    }
+    function writeConfig(zones) {
+      var cur = {};
+      if (fs.existsSync(cfgFile)) cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
+      if (!cur || typeof cur !== 'object' || Array.isArray(cur)) throw new Error('config.json is not valid');
+      cur.ha = Object.assign({}, cur.ha, { lightZones: zones, lights: flat(zones) });
+      fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2));
+      CONFIG = cur;
+    }
+    function activate(s) {
+      var before = flat(haCfg().zones).concat(haCfg().lights || []), zones = JSON.parse(JSON.stringify(s.zones));
+      writeConfig(zones);
+      var keep = flat(zones), left = before.filter(function (en, i, a) { return en && a.indexOf(en) === i && keep.indexOf(en) < 0; });
+      if (global.__rsFlicker) Object.keys(haCfg().zones || {}).forEach(function (k) { try { global.__rsFlicker.stop(k); } catch (e) {} });
+      settings.ha = Object.assign({}, settings.ha, { lightZones: zones, lights: keep });
+      store.active = s.id; store.applied = true; save();
+      if (haOn()) {
+        if (left.length) haCall('light', 'turn_off', { entity_id: left, transition: 2 }, function () {});
+        lastHaSig = null; try { haApplyRoom(); } catch (e) { console.log('[setups] lights: ' + (e && e.message)); }
+      }
+      console.log('[setups] now using "' + s.name + '" (' + keep.length + ' lights, ' + left.length + ' turned off)');
+      return left;
+    }
+    /* A tab opened before a switch still holds the old lights in its settings; don't let its save undo the switch. */
+    global.__rsSetupHa = function () { load(); return (store.applied && CONFIG.ha) ? { lightZones: CONFIG.ha.lightZones, lights: CONFIG.ha.lights } : null; };
+    if (load().applied && CONFIG.ha) settings.ha = Object.assign({}, settings.ha, global.__rsSetupHa());
+    R.add('ALL', '/api/setups', function (req, res, u, real) {
+      function view() { var s = load(), names = []; s.list.forEach(function (x) { Object.keys(x.zones || {}).forEach(function (k) { if (names.indexOf(k) < 0) names.push(k); }); }); return { ok: true, active: s.active, applied: !!s.applied, zoneNames: names, list: s.list }; }
+      if (req.method === 'GET') return real.json(200, view());
+      if (req.method !== 'POST') return real.json(405, { ok: false, error: 'GET or POST only' });
+      R.readBody(req, function (b) {
+        try {
+          load();
+          if (b && b.list) {
+            var c = clean(b.list); if (typeof c === 'string') return real.json(400, { ok: false, error: c });
+            store.list = c; if (!c.some(function (x) { return x.id === store.active; })) store.active = c[0].id;
+            save();
+            var live = store.applied && c.find(function (x) { return x.id === store.active; });
+            if (live) activate(live);
+            return real.json(200, view());
+          }
+          var s = store.list.find(function (x) { return x.id === (b && b.activate); });
+          if (!s) return real.json(404, { ok: false, error: 'unknown setup' });
+          var left = activate(s), v = view(); v.turnedOff = left;
+          return real.json(200, v);
+        } catch (e) { return real.json(500, { ok: false, error: String(e && e.message || e).slice(0, 160) }); }
+      });
+    });
+    console.log('[setups] ready — ' + load().list.length + ' setups');
+  } catch (e) { try { console.error('[setups] init failed:', e && e.message); } catch (x) {} }
 })();
