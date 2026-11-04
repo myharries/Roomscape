@@ -6156,17 +6156,19 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
       });
       return err || out;
     }
-    function writeConfig(zones) {
+    function writeConfig(zones, name) {
       var cur = {};
       if (fs.existsSync(cfgFile)) cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
       if (!cur || typeof cur !== 'object' || Array.isArray(cur)) throw new Error('config.json is not valid');
       cur.ha = Object.assign({}, cur.ha, { lightZones: zones, lights: flat(zones) });
+      if (Array.isArray(cur.rooms)) cur.rooms.forEach(function (r) { if (r && r.id === 'main') r.name = name; });   // the room pill shows the setup in use
       fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2));
       CONFIG = cur;
+      if (CONFIG.rooms) settings.rooms = CONFIG.rooms;
     }
     function activate(s) {
       var before = flat(haCfg().zones).concat(haCfg().lights || []), zones = JSON.parse(JSON.stringify(s.zones));
-      writeConfig(zones);
+      writeConfig(zones, s.name);
       var keep = flat(zones), left = before.filter(function (en, i, a) { return en && a.indexOf(en) === i && keep.indexOf(en) < 0; });
       if (global.__rsFlicker) Object.keys(haCfg().zones || {}).forEach(function (k) { try { global.__rsFlicker.stop(k); } catch (e) {} });
       settings.ha = Object.assign({}, settings.ha, { lightZones: zones, lights: keep });

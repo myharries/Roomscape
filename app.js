@@ -8239,6 +8239,7 @@
     return send({ activate: id }).then(function (j) {
       data = j; paintSwitch(); paintCard();
       say('Using ' + (j.list.find(function (s) { return s.id === id; }) || {}).name);
+      setTimeout(function () { location.reload(); }, 500);   // refreshes the room pill
     }).catch(function (e) { say('Could not switch: ' + e.message); paintSwitch(); });
   }
   function paintSwitch() {
