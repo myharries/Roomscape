@@ -1097,11 +1097,19 @@ function autoMapCondition(cond) {
 }
 /* The sky: which clip each weather type uses, plus any other files matching the same keyword */
 function weatherClips() {
-  const rules = { rainy: [/drizzle/, /rain/], pouring: [/heavy|pour|storm/, /rain|drizzle/], lightning: [/storm|thunder|lightning/, /heavy/, /rain/], snowy: [/snow/], fog: [/fog|mist/] };
+  const conds = ['sunny', 'clear-night', 'partlycloudy', 'cloudy', 'windy', 'windy-variant', 'fog', 'rainy', 'pouring', 'snowy', 'snowy-rainy', 'hail', 'lightning', 'lightning-rainy', 'exceptional'];
+  const rules = function (c) {
+    if (/pouring/.test(c)) return [/heavy|pour|storm/, /rain|drizzle/];
+    if (/lightning/.test(c)) return [/storm|thunder|lightning/, /heavy/, /rain/];
+    if (/rain/.test(c)) return [/drizzle/, /rain/];
+    if (/snow/.test(c)) return [/snow/];
+    if (/fog|mist/.test(c)) return [/fog|mist/];
+    return [];
+  };
   const files = effectFiles(), mapped = !!(settings.weather || {}).map;
-  return Object.keys(rules).map(function (cond) {
+  return conds.map(function (cond) {
     const eff = autoMapCondition(cond), clip = eff ? eff.split('/').pop() : null;
-    const re = rules[cond].find(function (r) { return files.some(function (f) { return r.test(f.toLowerCase()); }); });
+    const re = rules(cond).find(function (r) { return files.some(function (f) { return r.test(f.toLowerCase()); }); });
     const also = (!mapped && re) ? files.filter(function (f) { return f !== clip && re.test(f.toLowerCase()); }) : [];
     return { cond: cond, clip: clip, also: also };
   });
@@ -1111,6 +1119,7 @@ function pollWeather() {
   const w = settings.weather || {}; if (!w.on || !haOn()) return;
   haFetch('GET', '/api/states/' + (w.entity || 'weather.home'), null, (err, code, data) => {
     if (err || !data || !data.state) return;
+    weather.live = data.state;                             // the real reading, kept during a preview
     if (Date.now() < weather.pinnedUntil) return;          // a preview/pin outranks the sky
     const cond = data.state, eff = autoMapCondition(cond);
     const changed = cond !== weather.cond || eff !== weather.effect;
@@ -1500,7 +1509,7 @@ function coreHandler(req, res) {
       const t = rhythmTarget(), nx = (settings.rhythms || {}).on ? rhythmNextChange() : null;
       return sendJSON(res, 200, { ok: true, rhythmsOn: !!(settings.rhythms || {}).on, ambient: isAmbient(), game: state.game,
         target: t, next: nx, holdUntil: holdUntil, special: t && t.special || null,
-        weather: { on: !!(settings.weather || {}).on, cond: weather.cond, effect: weather.effect, pinnedUntil: weather.pinnedUntil, ha: haOn(), clips: weatherClips() },
+        weather: { on: !!(settings.weather || {}).on, cond: weather.cond, effect: weather.effect, pinnedUntil: weather.pinnedUntil, ha: haOn(), live: weather.live || null, clips: weatherClips() },
         schedule: Array.isArray(settings.schedule) ? settings.schedule : [],                                   // v2.62 autopilot v2
         sunShift: Object.assign({ on: false, offsetMin: 0 }, settings.sunShift || {}) });                      // v2.62 autopilot v2
     }
