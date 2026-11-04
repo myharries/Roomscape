@@ -93,6 +93,7 @@ dialog{background:var(--fog);color:var(--moon);border:1px solid var(--line);bord
   <span class="badge" id="h_game">no game</span><span class="badge live" id="h_phase" hidden></span>
   <span class="sp"></span>
   <span class="badge" id="h_room">Room: not set</span>
+  <button class="sm" style="border-radius:99px" onclick="openPreflight()">🧭 Pre-game check</button>
   <button class="sm" onclick="openSettings()">⚙ Settings</button><button class="sm" onclick="logout()">Log out</button>
 </div>
 <main>
@@ -110,7 +111,7 @@ dialog{background:var(--fog);color:var(--moon);border:1px solid var(--line);bord
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_follow" style="width:auto" onchange="setFollow(this.checked)"> <b>Follow the game automatically</b></label></div>
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_test" style="width:auto" onchange="setLightTest(this.checked)"> Test lights in daylight <span class="sub" id="r_sun"></span></label></div>
     <div class="grid" id="r_modes"></div>
-    <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button><button onclick="openPreflight()">🧭 Pre-game check</button></div>
+    <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button></div>
     <h3 style="margin-top:14px">Room log</h3><div class="log" id="r_log"></div>
   </section>
 </main>
