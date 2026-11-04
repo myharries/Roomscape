@@ -8227,6 +8227,7 @@
 /* ================= SAVED SETUPS: top-bar switch and Settings card ================= */
 ;(function () {
   var D = document, data = null;
+  (function () { var st = D.createElement('style'); st.textContent = '#rs-setups-body input{background:var(--panel);color:inherit;border:1px solid var(--line);border-radius:8px;padding:7px 9px;width:100%;box-sizing:border-box;font:inherit;font-size:13px}#rs-setups-body input::placeholder{color:inherit;opacity:.45}'; D.head.appendChild(st); })();
   function say(m) { if (window.__rsToast) window.__rsToast(m); }
   function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
   function send(body) {
