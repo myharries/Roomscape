@@ -16,6 +16,7 @@
 - Settings > Setup > Library & previews can set a mode's thumbnail from your own picture, which automatic rebuilds keep.
 - Weather effects accept `lightning` in a filename, and The sky lists each weather type's clip with a warning when several files match.
 - Photo frames have a Photo fit setting: Automatic, Whole photo, or Fill and crop.
+- The controller has a Pre-game check for the room, theme, lights and game.
 
 ## 1.05 — 2026-08-25 (conductor v5.05)
 

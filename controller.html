@@ -110,12 +110,20 @@ dialog{background:var(--fog);color:var(--moon);border:1px solid var(--line);bord
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_follow" style="width:auto" onchange="setFollow(this.checked)"> <b>Follow the game automatically</b></label></div>
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_test" style="width:auto" onchange="setLightTest(this.checked)"> Test lights in daylight <span class="sub" id="r_sun"></span></label></div>
     <div class="grid" id="r_modes"></div>
-    <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button></div>
+    <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button><button onclick="openPreflight()">🧭 Pre-game check</button></div>
     <h3 style="margin-top:14px">Room log</h3><div class="log" id="r_log"></div>
   </section>
 </main>
 </div>
 
+<dialog id="pf" style="max-width:640px"><h2>🧭 Pre-game check</h2>
+  <p class="sub" id="pf_sum">Checking…</p><div id="pf_list"></div>
+  <h3 style="margin-top:14px">See and hear it for yourself</h3>
+  <p class="sub">This runs Night Falls in the room, so don't use it during a game.</p>
+  <div class="row"><button class="sm" onclick="pfRoomTest()">▶ Run the room test</button><button class="sm" onclick="pfRoomEnd()">⏹ Finish the test</button></div>
+  <div id="pf_manual" style="margin-top:8px"></div>
+  <div class="row" style="margin-top:12px"><button onclick="pfRun()">↻ Check again</button><span class="sp" style="flex:1"></span><button onclick="$('#pf').close()">Close</button></div>
+</dialog>
 <dialog id="settings"><h2>Settings</h2>
   <p class="sub">Saved on this device only.</p>
   <label>Game server address (api.php)<input id="s_api"></label>
@@ -197,6 +205,31 @@ async function mailTo(id,el){try{const j=await api('admin_send_code',{id});el.te
 setInterval(()=>{const f=t=>Math.floor(t/60)+':'+String(t%60).padStart(2,'0'),left=d=>Math.max(0,Math.ceil((d-Date.now())/1000));
  const w=$('#t_wolf');if(w&&S&&S._wd)w.textContent=f(left(S._wd));const v=$('#t_vote');if(v&&S&&S._vd)v.textContent=f(left(S._vd))},500);
 
+/* ---------- pre-game check: reads only, until the room test button is pressed ---------- */
+const PF_MANUAL=['The screen changed to Night Falls','You can hear the sound','The room lights changed colour'];
+function openPreflight(){$('#pf').showModal();$('#pf_manual').innerHTML=PF_MANUAL.map(t=>`<label class="row" style="margin:4px 0"><input type="checkbox" style="width:auto"> ${esc(t)}</label>`).join('');pfRun()}
+async function pfRun(){const R=[],add=(st,name,msg,fix)=>{R.push({st,name,msg,fix});pfPaint(R,false)};$('#pf_list').innerHTML='';$('#pf_sum').textContent='Checking…';
+ const stop=()=>pfPaint(R,true);let h,zones={},ents=[];
+ add(tok?'ok':'bad','Game server',tok?'You are logged in.':'Not logged in.','Log in to the controller.');
+ try{h=await rs('/api/health');add('ok','Roomscape',`Connected, version ${h.version||'unknown'}.`)}catch(e){add('bad','Roomscape','Cannot be reached: '+e.message,'Check the Roomscape address in ⚙ Settings, and that the container is running.');return stop()}
+ add(h.ha?'ok':'bad','Home Assistant',h.ha?'Connected.':'Not connected.','Check HA_URL and HA_TOKEN in Roomscape\'s .env file.');
+ let hasTok=false;try{const j=await rs('/api/ha/entities?domain=light');hasTok=true;ents=j.entities||j.states||[];add('ok','Admin token','Accepted.')}catch(e){add('bad','Admin token',/auth|401/i.test(e.message)?'Not accepted.':'Could not be tested: '+e.message,'Enter the Roomscape admin token in ⚙ Settings.')}
+ try{const t=await rs('/api/themes'),p=(t.themes||[]).find(x=>x.id===C.pack());
+  if(!p)add('bad','Theme pack',`"${C.pack()}" was not found.`,'Check the theme pack id in ⚙ Settings, then rescan themes in Roomscape.');
+  else{if((p.errors||[]).length)add('bad','Theme pack',p.errors.join('; '),'Fix theme.json, then rescan themes.');else add('ok','Theme pack',`${p.name||p.id}: ${(p.modes||[]).length} modes loaded.`);
+   const miss=p.missing||[];add(miss.length?'warn':'ok','Theme files',miss.length?`${miss.length} missing: ${miss.slice(0,4).map(m=>String(m).split('/').pop()).join(', ')}${miss.length>4?'…':''}`:'All files found.','Add the missing files to the theme folder, then rescan themes.');
+   const ids=(p.modes||[]).map(m=>typeof m==='string'?m:(m.id||'')).map(s=>s.replace(C.pack()+'.','')),gone=MODES.filter(m=>!ids.includes(m[0])).map(m=>m[1]);add(gone.length?'bad':'ok','Controller modes',gone.length?'Not in the theme: '+gone.join(', '):`All ${MODES.length} controller modes are in the theme.`,'Add these modes to theme.json, or update the controller.')}}catch(e){add('bad','Theme pack','Could not be read: '+e.message)}
+ try{zones=(await rs('/api/ha/lightzones')).zones||{};const names=Object.keys(zones);
+  if(!names.length)add('warn','Light zones','No light zones are set up.','Set up zones in Roomscape\'s Home Assistant settings.');
+  else{const list=names.flatMap(z=>zones[z]||[]),byId={};ents.forEach(e=>byId[e.id||e.entity_id]=e);const dead=hasTok&&ents.length?list.filter(id=>!byId[id]||(byId[id].state==='unavailable')):[];add(dead.length?'warn':'ok','Room lights',dead.length?`Unavailable: ${dead.join(', ')}`:`${list.length} lights in ${names.join(', ')}${hasTok&&ents.length?', all available':''}.`,'Check those lights in Home Assistant.')}}catch(e){add('warn','Light zones','Could not be read: '+e.message)}
+ try{const s=await rs('/api/ha/afterdark');showSun(s);add(s.bypass||s.dark?'ok':'warn','Sun check',s.bypass?`Daylight test on, ${Math.ceil(s.bypassLeftS/60)} minutes left.`:s.dark?'It\'s dark, so the lights will run.':s.sunUp?'The sun is up, so the lights will stay off.':'Sun state unknown.','This is fine for a night game. To test now, tick Test lights in daylight.')}catch(e){add('warn','Sun check','Could not be read: '+e.message)}
+ try{const n=Math.max(0,(h.clients||0));add(n?'ok':'bad','Screens',n?`${n} screen or app page${n===1?'':'s'} connected to Roomscape.`:'Nothing is connected.','Open the frame page on the TV.')}catch(e){}
+ add(C.follow()?'ok':'warn','Follow the game',C.follow()?'On, so the room will follow the game.':'Off, so the room won\'t change by itself.','Tick Follow the game automatically.');
+ stop()}
+function pfPaint(R,done){const ic={ok:'✅',warn:'⚠️',bad:'❌'};$('#pf_list').innerHTML=R.map(r=>`<div class="row" style="align-items:flex-start;flex-wrap:nowrap;margin:6px 0"><span>${ic[r.st]}</span><div><b>${esc(r.name)}</b> <span class="sub">${esc(r.msg)}</span>${r.st!=='ok'&&r.fix?`<div class="sub" style="color:var(--lantern)">${esc(r.fix)}</div>`:''}</div></div>`).join('');
+ if(done){const b=R.filter(r=>r.st==='bad').length,w=R.filter(r=>r.st==='warn').length;$('#pf_sum').textContent=b?`${b} problem${b===1?'':'s'} to fix before the game.`:w?`Ready, with ${w} thing${w===1?'':'s'} to look at.`:'All clear. Ready for the game.'}}
+async function pfRoomTest(){try{const s=await rs('/api/ha/afterdark');if(s.sunUp&&!s.bypass)await setLightTest(true)}catch{}await launch('night',{manual:true});toast('Room test running')}
+async function pfRoomEnd(){try{const s=await rs('/api/ha/afterdark');if(s.bypass)await setLightTest(false)}catch{}await roomRest();toast('Room test finished')}
 /* ---------- the room (Roomscape) ---------- */
 function buildModes(){$('#r_modes').innerHTML=MODES.map(([id,name,ic])=>`<button id="m_${id}" onclick="launch('${id}',{manual:true})">${ic} ${esc(name)}</button>`).join('')}
 function markMode(){MODES.forEach(([id])=>{const b=$('#m_'+id);if(b)b.classList.toggle('on',roomMode===id)})}
