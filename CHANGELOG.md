@@ -17,7 +17,7 @@
 - Weather effects accept `lightning` in a filename, and The sky lists each weather type's clip with a warning when several files match.
 - Photo frames have a Photo fit setting: Automatic, Whole photo, or Fill and crop.
 - The controller has a Pre-game check for the room, theme, lights and game.
-- Saved setups keep several sets of room lights, with a switch on the main page and a card in Settings > Setup.
+- Saved setups keep several sets of room lights and up to six displays, with a switch on the main page and a card in Settings > Setup. The room pill shows the setup in use.
 
 ## 1.05 — 2026-08-25 (conductor v5.05)
 

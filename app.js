@@ -8238,9 +8238,16 @@
   function use(id) {
     return send({ activate: id }).then(function (j) {
       data = j; paintSwitch(); paintCard();
+      if (j.restarting) return reloadWhenBack();
       say('Using ' + (j.list.find(function (s) { return s.id === id; }) || {}).name);
       setTimeout(function () { location.reload(); }, 500);   // refreshes the room pill
     }).catch(function (e) { say('Could not switch: ' + e.message); paintSwitch(); });
+  }
+  function reloadWhenBack() {
+    say('Changing the screens, restarting Roomscape…');
+    var n = 0, t = setInterval(function () {
+      fetch('/api/health', { cache: 'no-store' }).then(function (r) { if (r.ok && ++n > 1) { clearInterval(t); location.reload(); } }).catch(function () { n = 0; });
+    }, 1500);
   }
   function paintSwitch() {
     var gear = D.getElementById('gear'); if (!gear || !data) return;
@@ -8260,6 +8267,9 @@
       + '<button type="button" class="btn sm" data-use="' + esc(s.id) + '"' + (s.id === data.active ? ' disabled' : '') + '>' + (s.id === data.active ? 'In use' : 'Use') + '</button>'
       + '<button type="button" class="btn sm gh" data-del="' + i + '">✕</button></div>'
       + zones.map(function (z) { return '<label class="fld"><span>' + esc(z) + ' lights</span><input data-z="' + esc(z) + '" value="' + esc(((s.zones || {})[z] || []).join(', ')) + '" placeholder="light.example, light.other"></label>'; }).join('')
+      + '<div style="margin-top:8px;font-size:12px;opacity:.7">Displays (optional, up to 6). Leave empty to keep the current screens.</div>'
+      + (s.displays || []).map(function (d) { return '<div data-d style="display:flex;gap:6px;margin-top:4px"><input data-df="frame" value="' + esc(d.frame) + '" placeholder="Screen, e.g. L1" aria-label="Screen ID" style="flex:1"><input data-df="wall" value="' + esc(d.wall) + '" placeholder="Wall, e.g. L" aria-label="Wall" style="flex:1"><input data-df="tv" list="rs-tv-list" value="' + esc(d.tv) + '" placeholder="TV (optional): media_player.…" aria-label="Home Assistant TV" style="flex:3"><button type="button" class="btn sm gh" data-ddel>✕</button></div>'; }).join('')
+      + '<div style="margin-top:6px"><button type="button" class="btn sm" data-dadd="' + i + '"' + ((s.displays || []).length >= 6 ? ' disabled' : '') + '>＋ Add display</button></div>'
       + '</div>';
   }
   function paintCard() {
@@ -8269,6 +8279,8 @@
       + '<div style="margin-top:10px"><button type="button" class="btn sm" id="rs-setup-add">＋ Add setup</button> <button type="button" class="btn sm" id="rs-setup-save">Save setups</button></div>';
     c.querySelectorAll('[data-use]').forEach(function (b) { b.onclick = function () { use(b.dataset.use); }; });
     c.querySelectorAll('[data-del]').forEach(function (b) { b.onclick = function () { var l = read(); if (l.length < 2) return say('Keep at least one setup'); l.splice(+b.dataset.del, 1); data.list = l; paintCard(); }; });
+    c.querySelectorAll('[data-dadd]').forEach(function (b) { b.onclick = function () { var l = read(), s = l[+b.dataset.dadd]; (s.displays = s.displays || []).push({ frame: '', wall: '', tv: '' }); data.list = l; paintCard(); }; });
+    c.querySelectorAll('[data-ddel]').forEach(function (b) { b.onclick = function () { b.parentNode.remove(); data.list = read(); paintCard(); }; });
     D.getElementById('rs-setup-add').onclick = function () { var l = read(); l.push({ name: 'New setup', zones: {} }); data.list = l; paintCard(); };
     D.getElementById('rs-setup-save').onclick = function () { send({ list: read() }).then(function (j) { data = j; paintSwitch(); paintCard(); say('Setups saved'); }).catch(function (e) { say('Not saved: ' + e.message); }); };
   }
@@ -8277,15 +8289,18 @@
     return [].map.call(D.querySelectorAll('#rs-setups-body [data-i]'), function (r) {
       var old = data.list[+r.dataset.i] || {}, zones = {};
       r.querySelectorAll('[data-z]').forEach(function (i) { zones[i.dataset.z] = list(i.value); });
-      return { id: old.id, name: r.querySelector('[data-f=name]').value, zones: zones };
+      var displays = [].map.call(r.querySelectorAll('[data-d]'), function (d) { return { frame: d.querySelector('[data-df=frame]').value.trim(), wall: d.querySelector('[data-df=wall]').value.trim(), tv: d.querySelector('[data-df=tv]').value.trim() }; });
+      return { id: old.id, name: r.querySelector('[data-f=name]').value, zones: zones, displays: displays };
     });
   }
   function inject() {
     var setup = D.querySelector('.setsec[data-sec="setup"]');
     if (!setup || D.getElementById('rs-setups-card')) return;
     var card = D.createElement('div'); card.className = 'card'; card.id = 'rs-setups-card';
-    card.innerHTML = '<div class="zt">Saved setups</div><div style="opacity:.7;font-size:12px;margin:2px 0 6px">Each setup has its own room lights. Switching turns off lights that aren’t in the new setup, and leaves your TVs alone. Separate light ids with commas.</div><div id="rs-setups-body"></div>';
+    card.innerHTML = '<div class="zt">Saved setups</div><div style="opacity:.7;font-size:12px;margin:2px 0 6px">Each setup has its own room lights, and can have its own screens. Switching turns off lights that aren’t in the new setup. Changing screens restarts Roomscape. A TV is only needed if you want Roomscape to wake it. Separate light ids with commas.</div><div id="rs-setups-body"></div>';
     setup.insertBefore(card, setup.firstChild);
+    var dl = D.createElement('datalist'); dl.id = 'rs-tv-list'; card.appendChild(dl);
+    fetch('/api/ha/entities?domain=media_player').then(function (r) { return r.json(); }).then(function (j) { dl.innerHTML = ((j && j.entities) || []).map(function (e) { return '<option value="' + esc(e.entity_id) + '">' + esc(e.friendly_name) + '</option>'; }).join(''); }).catch(function () {});
     paintCard();
   }
   new MutationObserver(inject).observe(D.body, { childList: true, subtree: true });

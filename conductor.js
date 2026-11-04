@@ -6152,36 +6152,55 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
           if (!/^[\w -]{1,30}$/.test(k)) { err = 'bad zone name: ' + k; return; }
           zones[k] = (s.zones[k] || []).map(String); zones[k].forEach(function (en) { if (!ENT.test(en)) err = 'bad light id: ' + en; });
         });
-        out.push({ id: id, name: name, zones: zones });
+        var seen = {}, displays = Array.isArray(s.displays) ? s.displays.filter(function (d) { return d && String(d.frame || '').trim(); }) : [];
+        if (displays.length > 6) err = name + ' has more than 6 displays';
+        displays = displays.map(function (d) {
+          var o = { frame: String(d.frame).trim(), wall: String(d.wall || 'W').trim() || 'W', tv: String(d.tv || '').trim() };
+          if (!/^[A-Za-z0-9_-]{1,24}$/.test(o.frame) || !/^[A-Za-z0-9_-]{1,24}$/.test(o.wall)) err = 'bad screen or wall name in ' + name + ': use letters, numbers, - or _';
+          if (o.tv && !/^media_player\.[a-z0-9_]+$/.test(o.tv)) err = 'bad TV id: ' + o.tv;
+          if (seen[o.frame]) err = 'screen ' + o.frame + ' is listed twice in ' + name; seen[o.frame] = 1;
+          return o;
+        });
+        out.push({ id: id, name: name, zones: zones, displays: displays });
       });
       return err || out;
     }
-    function writeConfig(zones, name) {
+    function writeConfig(zones, name, displays) {
       var cur = {};
       if (fs.existsSync(cfgFile)) cur = JSON.parse(fs.readFileSync(cfgFile, 'utf8'));
       if (!cur || typeof cur !== 'object' || Array.isArray(cur)) throw new Error('config.json is not valid');
       cur.ha = Object.assign({}, cur.ha, { lightZones: zones, lights: flat(zones) });
       if (Array.isArray(cur.rooms)) cur.rooms.forEach(function (r) { if (r && r.id === 'main') r.name = name; });   // the room pill shows the setup in use
+      var moved = false;
+      if (displays && displays.length) {
+        var walls = {}, tvs = {};
+        displays.forEach(function (d) { (walls[d.wall] = walls[d.wall] || []).push(d.frame); if (d.tv) tvs[d.frame] = d.tv; });
+        moved = JSON.stringify(walls) !== JSON.stringify((cur.layout || {}).walls || null);
+        if (moved) { cur.layout = Object.assign({}, cur.layout, { walls: walls }); delete cur.layout.roles; }
+        cur.ha.tvs = tvs;
+      }
       fs.writeFileSync(cfgFile, JSON.stringify(cur, null, 2));
       CONFIG = cur;
       if (CONFIG.rooms) settings.rooms = CONFIG.rooms;
+      return moved;
     }
     function activate(s) {
       var before = flat(haCfg().zones).concat(haCfg().lights || []), zones = JSON.parse(JSON.stringify(s.zones));
-      writeConfig(zones, s.name);
+      var moved = writeConfig(zones, s.name, s.displays);
       var keep = flat(zones), left = before.filter(function (en, i, a) { return en && a.indexOf(en) === i && keep.indexOf(en) < 0; });
       if (global.__rsFlicker) Object.keys(haCfg().zones || {}).forEach(function (k) { try { global.__rsFlicker.stop(k); } catch (e) {} });
-      settings.ha = Object.assign({}, settings.ha, { lightZones: zones, lights: keep });
+      settings.ha = Object.assign({}, settings.ha, { lightZones: zones, lights: keep }, (s.displays || []).length ? { tvs: CONFIG.ha.tvs } : {});
       store.active = s.id; store.applied = true; save();
       if (haOn()) {
         if (left.length) haCall('light', 'turn_off', { entity_id: left, transition: 2 }, function () {});
         lastHaSig = null; try { haApplyRoom(); } catch (e) { console.log('[setups] lights: ' + (e && e.message)); }
       }
       console.log('[setups] now using "' + s.name + '" (' + keep.length + ' lights, ' + left.length + ' turned off)');
-      return left;
+      return { left: left, moved: moved };
     }
+    function restartSoon() { console.log('[setups] screen layout changed, restarting'); setTimeout(function () { process.exit(0); }, 500); }
     /* A tab opened before a switch still holds the old lights in its settings; don't let its save undo the switch. */
-    global.__rsSetupHa = function () { load(); return (store.applied && CONFIG.ha) ? { lightZones: CONFIG.ha.lightZones, lights: CONFIG.ha.lights } : null; };
+    global.__rsSetupHa = function () { load(); return (store.applied && CONFIG.ha) ? { lightZones: CONFIG.ha.lightZones, lights: CONFIG.ha.lights, tvs: CONFIG.ha.tvs || {} } : null; };
     if (load().applied && CONFIG.ha) settings.ha = Object.assign({}, settings.ha, global.__rsSetupHa());
     R.add('ALL', '/api/setups', function (req, res, u, real) {
       function view() { var s = load(), names = []; s.list.forEach(function (x) { Object.keys(x.zones || {}).forEach(function (k) { if (names.indexOf(k) < 0) names.push(k); }); }); return { ok: true, active: s.active, applied: !!s.applied, zoneNames: names, list: s.list }; }
@@ -6195,12 +6214,12 @@ directorOnModeChange = function () { try { modeMusicFollow(); } catch (e) {} ret
             store.list = c; if (!c.some(function (x) { return x.id === store.active; })) store.active = c[0].id;
             save();
             var live = store.applied && c.find(function (x) { return x.id === store.active; });
-            if (live) activate(live);
-            return real.json(200, view());
+            var sv = view(); if (live && activate(live).moved) { sv.restarting = true; restartSoon(); }
+            return real.json(200, sv);
           }
           var s = store.list.find(function (x) { return x.id === (b && b.activate); });
           if (!s) return real.json(404, { ok: false, error: 'unknown setup' });
-          var left = activate(s), v = view(); v.turnedOff = left;
+          var did = activate(s), v = view(); v.turnedOff = did.left; if (did.moved) { v.restarting = true; restartSoon(); }
           return real.json(200, v);
         } catch (e) { return real.json(500, { ok: false, error: String(e && e.message || e).slice(0, 160) }); }
       });
