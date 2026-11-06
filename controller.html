@@ -110,6 +110,7 @@ dialog{background:var(--fog);color:var(--moon);border:1px solid var(--line);bord
     <p class="sub" id="r_status">Set the Roomscape address and token in Settings.</p>
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_follow" style="width:auto" onchange="setFollow(this.checked)"> <b>Follow the game automatically</b></label></div>
     <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_test" style="width:auto" onchange="setLightTest(this.checked)"> Test lights in daylight <span class="sub" id="r_sun"></span></label></div>
+    <div class="row" style="margin:6px 0"><label class="row" style="margin:0"><input type="checkbox" id="r_narr" style="width:auto" onchange="setRoomNarrate(this.checked)"> Narrate in the room</label><button class="sm" onclick="testRoomNarrate()">Test voice</button></div>
     <div class="grid" id="r_modes"></div>
     <div class="row" style="margin-top:10px"><button class="danger" onclick="roomRest()">⏹ At rest (stop everything)</button></div>
     <h3 style="margin-top:14px">Room log</h3><div class="log" id="r_log"></div>
@@ -156,8 +157,8 @@ async function api(a,b={}){const url=C.api();if(!url){toast('Set the game server
 async function doLogin(){LS['wc.api']=$('#l_api').value.trim();if(!$('#l_u').value||!$('#l_p').value){toast('Enter your admin username and password.');return}try{const j=await api('login',{username:$('#l_u').value,password:$('#l_p').value,code:''});if(!j.admin){toast('That account is not an admin.');return}tok=j.token;LS['wc.tok']=tok;start()}catch{}}
 async function logout(quiet){try{if(!quiet&&tok)await api('logout')}catch{}tok=null;delete LS['wc.tok'];clearInterval(timer);S=null;lastId=null;$('#app').hidden=true;showLogin()}
 function showLogin(){$('#login').hidden=false;$('#l_origin').textContent=location.origin;$('#l_api').value=C.api()||'https://myharries.com/werewolf-test/api.php'}
-function start(){$('#login').hidden=true;$('#app').hidden=false;$('#r_follow').checked=C.follow();buildModes();poll();clearInterval(timer);timer=setInterval(poll,2000);roomHealth();setInterval(roomHealth,15000)}
-async function poll(){if(!tok)return;try{S=await api('ctl');S._wd=S.wolfLeft!=null?Date.now()+S.wolfLeft*1000:0;S._vd=S.voteLeft!=null?Date.now()+S.voteLeft*1000:0;renderGame();follow()}catch{}}
+function start(){$('#login').hidden=true;$('#app').hidden=false;$('#r_follow').checked=C.follow();$('#r_narr').checked=LS['wc.narr']==='1';buildModes();poll();clearInterval(timer);timer=setInterval(poll,2000);roomHealth();setInterval(roomHealth,15000)}
+async function poll(){if(!tok)return;try{S=await api('ctl');S._wd=S.wolfLeft!=null?Date.now()+S.wolfLeft*1000:0;S._vd=S.voteLeft!=null?Date.now()+S.voteLeft*1000:0;renderGame();roomNarrate();follow()}catch{}}
 const send=async o=>{try{S=await api('game',o);await poll()}catch{}};
 const ask=(m,fn)=>confirm(m)&&fn();
 
@@ -249,7 +250,7 @@ async function launch(mode,o={}){
   roomMode=mode;markMode();rlog(`${o.auto?'Auto: ':''}${mode}${skip?' (no intro)':''}`);
  }
  catch(e){rlog(`Could not launch ${mode}: ${e.message}`,true);toast('Room: '+e.message)}}
-async function roomRest(){qClear();try{await rs('/api/panic',true);roomMode=null;markMode();
+async function roomRest(){qClear();nqClear();try{await rs('/api/panic',true);roomMode=null;markMode();
  $('#r_log').innerHTML='';   /* At rest clears the room log */
  rlog('At rest')}catch(e){rlog('Could not stop the room: '+e.message,true)}}
 async function roomHealth(){const el=$('#h_room'),st=$('#r_status');if(!C.rs()&&!C.tok()){el.textContent='Room: not set';return}
@@ -258,6 +259,15 @@ async function roomHealth(){const el=$('#h_room'),st=$('#r_status');if(!C.rs()&&
 function showSun(s){$('#r_test').checked=!!s.bypass;$('#r_sun').textContent=s.bypass?`(${Math.ceil(s.bypassLeftS/60)} min left)`:s.dark?'(after dark: lights on duty)':s.sunUp?'(sun is up: lights stay off)':''}
 async function setLightTest(on){try{showSun(await rs('/api/ha/afterdark',true,{bypass:on}));rlog(on?'Light test on for 30 minutes':'Light test off')}catch(e){rlog('Could not change the light test: '+e.message,true);$('#r_test').checked=!on}}
 function setFollow(on){LS['wc.follow']=on?'1':'0';lastId=null;qClear();rlog(on?'Following the game':'Stopped following')}
+/* ---------- room narration: optional, and separate from the phones' own narration ---------- */
+let nLast=null,nQ=[],nBusy=false,nWarned=false;
+function nqClear(){nQ=[]}
+function setRoomNarrate(on){LS['wc.narr']=on?'1':'0';nqClear();rlog(on?'Narrating in the room':'Stopped narrating in the room')}
+function roomNarrate(){const l=(S&&S.narr)||[],top=l.length?l[l.length-1].id:0;if(nLast===null||top<nLast){nLast=top;return}
+ const fresh=l.filter(x=>x.id>nLast);nLast=top;if(LS['wc.narr']!=='1')return;fresh.forEach(x=>{if(x.text)nQ.push(x.text)});nPump()}
+async function nPump(){if(nBusy)return;nBusy=true;while(nQ.length){const t=nQ.shift();try{await rs('/api/tts',true,{text:t.slice(0,380),speak:true});nWarned=false}catch(e){if(!nWarned){nWarned=true;rlog('Room narration failed: '+e.message,true);toast('Room narration failed. Is Piper set up in Home Assistant?')}}
+ await new Promise(r=>setTimeout(r,800+t.length*75))}nBusy=false}
+async function testRoomNarrate(){try{await rs('/api/tts',true,{text:'Night falls on the village. Everyone... sleep well.',speak:true});rlog('Test line sent')}catch(e){rlog('Room narration failed: '+e.message,true);toast('Room narration failed. Is Piper set up in Home Assistant?')}}
 /* map the game's narration lines to room modes (never replays old lines: it starts from "now") */
 /* each row: pattern, mode, spotlight, force, now (now = clears anything still waiting and plays straight away) */
 const MAP=[[/^Night falls/,'night',0,0,1],[/Werewolves have silently chosen/,'wolves',1],[/^The Seer has selected/,'seer',1],[/^The (Potion Maker|Witch) has made/,'witch',1],[/^The Doctor has chosen/,'doctor',1],[/^The Baker has prepared/,'feast',1],[/^Cupid has chosen/,'cupid',1],[/^The (Spell Caster|Wizard) has examined/,'spellcaster',1],[/^The Curmudgeon has chosen/,'curmudgeon',1],[/^The Masons have recognised/,'masons',1],[/^Dawn breaks/,'dawn'],[/^The village gathers/,'gather'],[/was devoured by the wolves/,'death-wolves'],[/was found dead/,'death-poison'],[/was lynched by the village|was shot by the Hunter|died of a broken heart/,'death'],[/^The vote is tied/,'tied'],[/reveals an? .* card\. The village pardons/,'pardon'],[/^The Baker.s feast protects/,'feast'],[/^It is time to vote/,'vote',0,0,1],[/^The vote is ending in 30/,'vote',0,1,1],[/The wolves are gone/,'victory-village'],[/^Love conquers all/,'victory-lovers'],[/The wolves have devoured the village/,'victory-wolves']];
